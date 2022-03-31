@@ -10,6 +10,7 @@
 **/*.rs.bk
 
 .idea/
+.vscode/
 
 .DS_Store
 

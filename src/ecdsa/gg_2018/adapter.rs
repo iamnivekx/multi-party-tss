@@ -20,11 +20,7 @@ pub struct PartySignup {
 pub trait Community {
     async fn get_entry(&self, key: &String) -> Result<Entry, ()>;
     async fn set_entry(&self, entry: &Entry) -> Result<Entry, ()>;
-    async fn get_party_signup(
-        &self,
-        parties: u16,
-        room_id: &String,
-    ) -> Result<PartySignup, ()>;
+    async fn get_party_signup(&self, parties: u16, room_id: &String) -> Result<PartySignup, ()>;
 }
 
 pub struct StoreCommunity<'a> {

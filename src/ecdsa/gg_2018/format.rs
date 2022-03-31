@@ -11,8 +11,7 @@ use curv::{
         proofs::sigma_correct_homomorphic_elgamal_enc::HomoELGamalProof,
         proofs::sigma_dlog::DLogProof, secret_sharing::feldman_vss::VerifiableSS,
     },
-    elliptic::curves::secp256_k1::{FE, GE},
-    elliptic::curves::traits::{ECPoint, ECScalar},
+    elliptic::curves::{secp256_k1::Secp256k1, Point, Scalar},
     BigInt,
 };
 
@@ -51,15 +50,15 @@ pub fn format_signers(
     party_num_int: u16,
     party_id: u16,
     round0_ans_vec: Vec<String>,
-) -> Vec<usize> {
+) -> Vec<u16> {
     let mut j = 0;
-    let mut signers_vec: Vec<usize> = Vec::new();
+    let mut signers_vec: Vec<u16> = Vec::new();
     for i in 1..=threshold + 1 {
         if i == party_num_int {
-            signers_vec.push((party_id - 1) as usize);
+            signers_vec.push(party_id - 1);
         } else {
             let signer_j: u16 = serde_json::from_str(&round0_ans_vec[j]).unwrap();
-            signers_vec.push((signer_j - 1) as usize);
+            signers_vec.push(signer_j - 1);
             j += 1;
         }
     }
@@ -95,12 +94,18 @@ pub fn format_message_b_and_ni_vec(
     sign_keys: &SignKeys,
     pallier_key_vector: &Vec<EncryptionKey>,
     m_a_vec: &Vec<MessageA>,
-    signers_vec: &Vec<usize>,
-) -> (Vec<MessageB>, Vec<FE>, Vec<MessageB>, Vec<FE>) {
+    signers_vec: &Vec<u16>,
+) -> (
+    Vec<MessageB>,
+    Vec<Scalar<Secp256k1>>,
+    Vec<MessageB>,
+    Vec<Scalar<Secp256k1>>,
+) {
     let mut m_b_gamma_send_vec: Vec<MessageB> = Vec::new();
-    let mut beta_vec: Vec<FE> = Vec::new();
+    let mut beta_vec: Vec<Scalar<Secp256k1>> = Vec::new();
     let mut m_b_w_send_vec: Vec<MessageB> = Vec::new();
-    let mut ni_vec: Vec<FE> = Vec::new();
+    let mut ni_vec: Vec<Scalar<Secp256k1>> = Vec::new();
+
     let mut j = 0;
     for i in 1..=threshold + 1 {
         if i == party_num_int {
@@ -109,14 +114,18 @@ pub fn format_message_b_and_ni_vec(
         let message_a = m_a_vec[j].clone();
         let (m_b_gamma, beta_gamma, _, _) = MessageB::b(
             &sign_keys.gamma_i,
-            &pallier_key_vector[signers_vec[(i - 1) as usize]],
+            &pallier_key_vector[usize::from(signers_vec[usize::from(i - 1)])],
             message_a.clone(),
-        );
+            &[],
+        )
+        .unwrap();
         let (m_b_w, beta_wi, _, _) = MessageB::b(
             &sign_keys.w_i,
-            &pallier_key_vector[signers_vec[(i - 1) as usize]],
+            &pallier_key_vector[usize::from(signers_vec[usize::from(i - 1)])],
             message_a.clone(),
-        );
+            &[],
+        )
+        .unwrap();
         m_b_gamma_send_vec.push(m_b_gamma);
         m_b_w_send_vec.push(m_b_w);
         beta_vec.push(beta_gamma);
@@ -146,14 +155,14 @@ pub fn format_round2_alpha_and_miu_vec(
     party_num_int: u16,
     m_b_gamma_rec_vec: &Vec<MessageB>,
     m_b_w_rec_vec: &Vec<MessageB>,
-    xi_com_vec: &Vec<GE>,
-    vss_scheme_vec: &Vec<VerifiableSS<GE>>,
+    xi_com_vec: &Vec<Point<Secp256k1>>,
+    vss_scheme_vec: &Vec<VerifiableSS<Secp256k1>>,
     party_keys: &Keys,
     sign_keys: &SignKeys,
-    signers_vec: &Vec<usize>,
-) -> (Vec<FE>, Vec<FE>) {
-    let mut alpha_vec: Vec<FE> = Vec::new();
-    let mut miu_vec: Vec<FE> = Vec::new();
+    signers_vec: &Vec<u16>,
+) -> (Vec<Scalar<Secp256k1>>, Vec<Scalar<Secp256k1>>) {
+    let mut alpha_vec: Vec<Scalar<Secp256k1>> = Vec::new();
+    let mut miu_vec: Vec<Scalar<Secp256k1>> = Vec::new();
     let mut j = 0;
     for i in 1..threshold + 2 {
         if i != party_num_int {
@@ -169,9 +178,9 @@ pub fn format_round2_alpha_and_miu_vec(
             alpha_vec.push(alpha_ij_gamma.0);
             miu_vec.push(alpha_ij_wi.0);
             let g_w_i = Keys::update_commitments_to_xi(
-                &xi_com_vec[signers_vec[(i - 1) as usize]],
-                &vss_scheme_vec[signers_vec[(i - 1) as usize]],
-                signers_vec[(i - 1) as usize],
+                &xi_com_vec[usize::from(signers_vec[usize::from(i - 1)])],
+                &vss_scheme_vec[usize::from(signers_vec[usize::from(i - 1)])],
+                signers_vec[usize::from(i - 1)],
                 &signers_vec,
             );
             assert_eq!(m_b.b_proof.pk, g_w_i);
