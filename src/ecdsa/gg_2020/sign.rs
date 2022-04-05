@@ -90,6 +90,7 @@ pub mod test {
             let url = "http://localhost:8000/";
             let address = surf::Url::parse(url.clone()).unwrap();
 
+            // TODO: could we change the sort order of the keys?
             let parties: Vec<u16> = vec![1, 2];
             let message = "hello";
             let room_id = "default-signing";
