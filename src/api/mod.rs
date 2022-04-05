@@ -3,15 +3,14 @@ use rocket::response::status::Custom;
 use rocket::serde::json::{json, Value};
 use rocket::Request;
 
-
 mod ecdsa;
 mod from_request;
 mod token;
 
-use token::gen_token;
 use ecdsa::gg_2018::centralized::{gen_keys, signatures};
 use ecdsa::gg_2018::distributed::{gen_key, sign_message};
 use ecdsa::gg_2018::management::{get_entry, set_entry, signup_party};
+use token::gen_token;
 
 #[catch(404)]
 fn not_found() -> Value {

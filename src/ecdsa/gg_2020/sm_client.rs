@@ -112,13 +112,3 @@ impl SmClient {
 struct IssuedUniqueIdx {
     unique_idx: u16,
 }
-
-#[derive(StructOpt, Debug)]
-enum Cmd {
-    Subscribe,
-    Broadcast {
-        #[structopt(short, long)]
-        message: String,
-    },
-    IssueIdx,
-}
