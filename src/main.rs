@@ -7,17 +7,22 @@ use dotenv::dotenv;
 use rocket::fairing::AdHoc;
 use rocket::Config;
 
-use std::collections::HashMap;
-use std::sync::RwLock;
+// use std::collections::HashMap;
+// use std::sync::RwLock;
 
 mod api;
 mod ecdsa;
+mod state;
+
+use crate::state::room::Db;
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     dotenv().ok();
-    let db: HashMap<String, String> = HashMap::new();
-    let state = RwLock::new(db);
+    // let db: HashMap<String, String> = HashMap::new();
+    // let db: HashMap<String, String> = HashMap::new();
+    // let state = RwLock::new(db);
+    let state = Db::empty();
     rocket::build()
         .manage(state)
         .attach(AdHoc::config::<Config>())

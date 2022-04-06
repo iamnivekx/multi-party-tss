@@ -439,10 +439,6 @@ pub async fn sign<'a>(
     let sig = local_sig
         .output_signature(&s_i_vec)
         .expect("verification failed");
-    println!("party {:?} Output Signature: \n", party_num_int);
-    println!("r: {:?}", sig.r);
-    println!("s: {:?} \n", sig.s);
-    println!("recid: {:?} \n", sig.recid.clone());
 
     let sign_json = json!({
         "r": BigInt::from_bytes(sig.r.to_bytes().as_ref()).to_str_radix(16),

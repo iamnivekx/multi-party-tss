@@ -42,7 +42,7 @@ pub mod test {
     async fn test_async_keygen() -> Result<()> {
         let parties: u16 = 3;
         let threshold = 1;
-        let room_id = "room_id_1_3_x";
+        let room_id = "room_id_1_3";
 
         let futures = vec![1, 2, 3].into_iter().map(|i| async move {
             let address = surf::Url::parse("http://127.0.0.1:8000").unwrap();

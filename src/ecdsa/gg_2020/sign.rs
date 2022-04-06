@@ -8,6 +8,7 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::sig
 };
 use round_based::async_runtime::AsyncProtocol;
 use round_based::Msg;
+use serde_json::json;
 
 use crate::ecdsa::gg_2020::sm_client::join_computation;
 
@@ -62,10 +63,17 @@ pub async fn sign(
         .map_ok(|msg| msg.body)
         .try_collect()
         .await?;
-    let signature = signing
+    let sig = signing
         .complete(&partial_signatures)
         .context("online stage failed")?;
-    let signature = serde_json::to_string(&signature).context("serialize signature")?;
+    // let signature = serde_json::to_string(&signature).context("serialize signature")?;
+
+    let signature = json!({
+        "r": BigInt::from_bytes(sig.r.to_bytes().as_ref()).to_str_radix(16),
+        "s": BigInt::from_bytes(sig.s.to_bytes().as_ref()).to_str_radix(16),
+        "v": sig.recid.clone(),
+    })
+    .to_string();
 
     Ok(signature)
 }
