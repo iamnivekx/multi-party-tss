@@ -282,7 +282,7 @@ pub mod test {
     use std::sync::RwLock;
 
     #[tokio::test]
-    async fn test_keygen_key_async() {
+    async fn test_async_keygen() {
         use futures::future;
         let db: HashMap<String, String> = HashMap::new();
         let store = RwLock::new(db);

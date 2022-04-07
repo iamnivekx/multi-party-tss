@@ -19,7 +19,7 @@ pub struct KeyGenReq {
     parties: u16,
     threshold: u16,
 }
-#[post("/key", data = "<request>")]
+#[post("/keys", data = "<request>")]
 pub async fn gen_key(
     token: Token,
     store: &State<RwLock<HashMap<String, String>>>,
