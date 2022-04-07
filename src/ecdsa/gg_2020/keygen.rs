@@ -14,8 +14,7 @@ pub async fn keygen(
 ) -> Result<String, anyhow::Error> {
     let (_i, incoming, outgoing) = join_computation(address, room_id)
         .await
-        .context("join computation")
-        .unwrap();
+        .context("join computation")?;
 
     let incoming = incoming.fuse();
     tokio::pin!(incoming);
@@ -24,8 +23,7 @@ pub async fn keygen(
     let output = AsyncProtocol::new(keygen, incoming, outgoing)
         .run()
         .await
-        .map_err(|e| anyhow!("protocol execution terminated with error: {}", e))
-        .unwrap();
+        .map_err(|e| anyhow!("protocol execution terminated with error: {}", e))?;
     let output = serde_json::to_string(&output).context("serialize output")?;
 
     Ok(output)
