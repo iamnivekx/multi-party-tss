@@ -50,7 +50,7 @@ fn default_catcher(status: Status, req: &Request<'_>) -> Custom<Value> {
 pub fn stage() -> rocket::fairing::AdHoc {
     rocket::fairing::AdHoc::on_ignite("JSON", |rocket| async {
         let rocket_build = rocket
-            .mount("/", routes![gen_token])
+            .mount("/", routes![gen_token,])
             .register("/", catchers![not_found, default_catcher]);
 
         match *GG_18 {
@@ -63,11 +63,11 @@ pub fn stage() -> rocket::fairing::AdHoc {
                 ),
             false => rocket_build
                 .mount(
-                    "/ecdsa/gg_20/management",
+                    "/ecdsa/gg_20/management/",
                     routes![broadcast, issue_idx, subscribe],
                 )
                 .mount(
-                    "/ecdsa/gg_20/distributed",
+                    "/ecdsa/gg_20/distributed/",
                     routes![gg20_gen_key, gg20_sign_message],
                 ),
         }
