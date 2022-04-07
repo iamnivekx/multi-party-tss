@@ -1,6 +1,8 @@
 use anyhow::Context;
 use curv::elliptic::curves::Secp256k1;
+use lazy_static::lazy_static;
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::LocalKey;
+use std::env;
 
 use rocket::http::Status;
 use rocket::response::status;
@@ -10,6 +12,15 @@ use rocket::serde::{Deserialize, Serialize};
 use crate::api::from_request::token::Token;
 use crate::ecdsa::gg_2020::{keygen::keygen, sign::sign};
 
+lazy_static! {
+    pub static ref COMMUNICATE_API: String = {
+        match env::var("COMMUNICATE_API") {
+            Ok(v) => v,
+            Err(_) => "".to_string(),
+        }
+    };
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct KeyGenReq {
     index: u16,
@@ -18,7 +29,8 @@ pub struct KeyGenReq {
 }
 #[post("/key", data = "<request>")]
 pub async fn gen_key(token: Token, request: Json<KeyGenReq>) -> status::Custom<Value> {
-    let address = surf::Url::parse("http://127.0.0.1:8000").unwrap();
+    let input = format!("{}", *COMMUNICATE_API);
+    let address = surf::Url::parse(input.as_str()).unwrap();
     let room_id = token.0.to_string();
     let index = request.index;
     let parties = request.parties;
@@ -50,7 +62,8 @@ pub struct KeySignReq<'r> {
 }
 #[post("/sign", data = "<request>")]
 pub async fn sign_message(token: Token, request: Json<KeySignReq<'_>>) -> status::Custom<Value> {
-    let address = surf::Url::parse("http://127.0.0.1:8000").unwrap();
+    let input = format!("{}", *COMMUNICATE_API);
+    let address = surf::Url::parse(input.as_str()).unwrap();
     let room_id = token.0.to_string();
     let key = request.key.as_str();
     let parties = request.parties.clone();

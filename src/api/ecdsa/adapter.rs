@@ -1,16 +1,15 @@
 use async_trait::async_trait;
-use std::collections::HashMap;
-use std::env;
-use std::sync::RwLock;
-use std::time::Duration;
-
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::env;
+use std::option::Option::Some;
+use std::sync::RwLock;
+use std::time::Duration;
 use tokio::time::sleep;
 
 pub use crate::ecdsa::gg_2018::adapter::{Community, Entry, PartySignup, StoreCommunity};
-use std::option::Option::Some;
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Index {

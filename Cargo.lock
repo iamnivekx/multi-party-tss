@@ -3353,6 +3353,7 @@ dependencies = [
  "futures",
  "hex",
  "kzen-paillier",
+ "lazy_static",
  "libsecp256k1",
  "multi-party-ecdsa",
  "rand 0.8.5",
