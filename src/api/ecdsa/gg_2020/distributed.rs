@@ -8,8 +8,7 @@ use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
 
 use crate::api::from_request::token::Token;
-use crate::ecdsa::gg_2020::keygen::keygen;
-use crate::ecdsa::gg_2020::sign::sign;
+use crate::ecdsa::gg_2020::{keygen::keygen, sign::sign};
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct KeyGenReq {
@@ -56,13 +55,15 @@ pub async fn sign_message(token: Token, request: Json<KeySignReq<'_>>) -> status
     let key = request.key.as_str();
     let parties = request.parties.clone();
     let message = request.message;
-    let signature = sign(key, parties, message, address, &room_id)
-        .await
-        .unwrap();
-    status::Custom(
-        Status::Ok,
-        json!({
-            "signature": signature,
-        }),
-    )
+    let signature = sign(key, parties.clone(), message, address, &room_id).await;
+    match signature {
+        Ok(sig) => status::Custom(
+            Status::Ok,
+            json!({
+                "signature": sig,
+                "parties": parties,
+            }),
+        ),
+        Err(e) => status::Custom(Status::InternalServerError, json!({"error": e.to_string()})),
+    }
 }

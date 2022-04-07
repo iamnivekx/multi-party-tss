@@ -30,7 +30,7 @@ fn default_catcher(status: Status, req: &Request<'_>) -> Custom<Value> {
         json!({
             "uri": req.uri(),
             "code": status.code,
-            "message": status.reason_lossy()
+            "reason": status.reason_lossy(),
         }),
     )
 }

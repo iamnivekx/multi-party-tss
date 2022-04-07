@@ -14,12 +14,11 @@ mod api;
 mod ecdsa;
 mod state;
 
-use crate::state::room::Db;
+use crate::state::db::Db;
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     dotenv().ok();
-    // let db: HashMap<String, String> = HashMap::new();
     // let db: HashMap<String, String> = HashMap::new();
     // let state = RwLock::new(db);
     let state = Db::empty();
