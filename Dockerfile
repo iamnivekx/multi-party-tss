@@ -3,6 +3,10 @@ FROM rust:1.54 as builder
 RUN rustup toolchain install nightly-2021-08-31 \
     && rustup default nightly-2021-08-31
 
+RUN apt-get update \
+    && apt-get install -y ca-certificates tzdata libcurl3 \
+    && rm -rf /var/lib/apt/lists/*
+
 # 1. Create a new empty shell project
 RUN USER=root cargo new --bin tss
 WORKDIR ./tss
@@ -24,7 +28,7 @@ RUN cargo build --release
 FROM debian:buster-slim
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates tzdata \
+    && apt-get install -y ca-certificates tzdata libcurl4\
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /tss/target/release/tss /usr/local/bin/tss
