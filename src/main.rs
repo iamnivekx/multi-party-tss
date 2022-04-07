@@ -3,9 +3,11 @@ extern crate rocket;
 
 use dotenv::dotenv;
 
-use rocket::data::Limits;
-use rocket::fairing::AdHoc;
-use rocket::Config;
+use rocket::{
+    data::{Limits, ToByteUnit},
+    fairing::AdHoc,
+    Config,
+};
 
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -33,8 +35,8 @@ async fn gg18() -> Result<(), rocket::Error> {
 #[allow(dead_code)]
 async fn gg20() -> Result<(), rocket::Error> {
     let state = Db::empty();
-    let figment =
-        rocket::Config::figment().merge(("limits", Limits::new().limit("string", 100.megabytes())));
+    let figment = rocket::Config::figment()
+        .merge(("limits", Limits::new().limit("string", 100_i32.megabytes())));
     rocket::custom(figment)
         .manage(state)
         .attach(AdHoc::config::<Config>())

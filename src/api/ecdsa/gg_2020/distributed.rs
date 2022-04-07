@@ -27,7 +27,7 @@ pub struct KeyGenReq {
     parties: u16,
     threshold: u16,
 }
-#[post("/key", data = "<request>")]
+#[post("/keys", data = "<request>")]
 pub async fn gen_key(token: Token, request: Json<KeyGenReq>) -> status::Custom<Value> {
     let input = format!("{}", *COMMUNICATE_API);
     let address = surf::Url::parse(input.as_str()).unwrap();
