@@ -3,6 +3,7 @@ extern crate rocket;
 
 use dotenv::dotenv;
 
+use rocket::data::Limits;
 use rocket::fairing::AdHoc;
 use rocket::Config;
 
@@ -32,7 +33,9 @@ async fn gg18() -> Result<(), rocket::Error> {
 #[allow(dead_code)]
 async fn gg20() -> Result<(), rocket::Error> {
     let state = Db::empty();
-    rocket::build()
+    let figment =
+        rocket::Config::figment().merge(("limits", Limits::new().limit("string", 100.megabytes())));
+    rocket::custom(figment)
         .manage(state)
         .attach(AdHoc::config::<Config>())
         .attach(api::stage())
@@ -45,7 +48,6 @@ async fn gg20() -> Result<(), rocket::Error> {
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     dotenv().ok();
-
     match *api::GG_18 {
         true => gg18().await,
         false => gg20().await,
