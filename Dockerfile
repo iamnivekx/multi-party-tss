@@ -1,17 +1,19 @@
 FROM rust:1.54 as builder
 
+WORKDIR /usr/src
+
 RUN rustup toolchain install nightly-2021-08-31 \
     && rustup default nightly-2021-08-31
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates tzdata libcurl3 \
+    && apt-get install -y ca-certificates tzdata libcurl4 \
     && rm -rf /var/lib/apt/lists/*
 
 # 1. Create a new empty shell project
 RUN USER=root cargo new --bin tss
-WORKDIR ./tss
 
 # 2. Copy our manifests
+WORKDIR /usr/src/tss
 COPY Cargo.toml Cargo.lock ./
 
 # 3. Build only the dependencies to cache them
@@ -31,6 +33,6 @@ RUN apt-get update \
     && apt-get install -y ca-certificates tzdata libcurl4\
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /tss/target/release/tss /usr/local/bin/tss
+COPY --from=builder /usr/src/tss/target/release/tss /usr/local/bin/tss
 
 CMD ["tss"]
