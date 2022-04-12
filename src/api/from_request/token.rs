@@ -1,13 +1,16 @@
 use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome, Request};
+use thiserror::Error;
 use uuid::Uuid;
 
 pub struct Token(pub String);
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ApiTokenError {
+    #[error("Api token missing")]
     Missing,
+    #[error("Api token invalid")]
     Invalid,
 }
 
@@ -15,7 +18,7 @@ pub enum ApiTokenError {
 fn is_valid(key: &str) -> bool {
     match Uuid::parse_str(key) {
         Ok(_) => true,
-        Err(_) => false
+        Err(_) => false,
     }
 }
 

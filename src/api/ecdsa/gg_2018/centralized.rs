@@ -10,7 +10,7 @@ use futures::future;
 use uuid::Uuid;
 
 use crate::ecdsa::gg_2018::common::party_key_pub_hex;
-use crate::ecdsa::gg_2018::keygen::keygen_key;
+use crate::ecdsa::gg_2018::keygen::keygen;
 use crate::ecdsa::gg_2018::sign::sign;
 
 use crate::api::ecdsa::adapter::get_adapter;
@@ -28,7 +28,7 @@ pub async fn gen_keys(request: Json<GenKeysReq>) -> Value {
     let db: HashMap<String, String> = HashMap::new();
     let store = RwLock::new(db);
     let adapter = get_adapter(&store);
-    let futures = (0..parties).map(|_| keygen_key(parties, threshold, &room_id, &adapter));
+    let futures = (0..parties).map(|_| keygen(parties, threshold, &room_id, &adapter));
     let keys = future::join_all(futures).await;
 
     let pub_hex = party_key_pub_hex(&keys[0]);

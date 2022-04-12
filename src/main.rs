@@ -50,6 +50,7 @@ async fn gg20() -> Result<(), rocket::Error> {
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     dotenv().ok();
+
     match *api::GG_18 {
         true => gg18().await,
         false => gg20().await,

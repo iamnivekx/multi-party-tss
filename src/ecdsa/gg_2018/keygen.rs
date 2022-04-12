@@ -25,7 +25,7 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2018::party_i::{
 use paillier::EncryptionKey;
 use sha2::Sha256;
 
-pub async fn keygen_key<'a>(
+pub async fn keygen<'a>(
     parties: u16,
     threshold: u16,
     room_id: &String,
@@ -273,7 +273,7 @@ pub async fn keygen_key<'a>(
 
 #[cfg(test)]
 pub mod test {
-    use super::keygen_key;
+    use super::keygen;
     use crate::ecdsa::gg_2018::common::Community;
     use crate::ecdsa::gg_2018::{adapter::StoreCommunity, common::party_key_pub_hex};
     use futures::future;
@@ -291,7 +291,7 @@ pub mod test {
         let threshold = 1;
         let room_id = "room_id".to_string();
         // let adapter =
-        let futures = (0..parties).map(|_| keygen_key(parties, threshold, &room_id, &adapter));
+        let futures = (0..parties).map(|_| keygen(parties, threshold, &room_id, &adapter));
         let results = future::join_all(futures).await;
 
         let pub_key1 = &results[0];

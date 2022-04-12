@@ -37,21 +37,27 @@ pub async fn gen_key(token: Token, request: Json<KeyGenReq>) -> status::Custom<V
     let threshold = request.threshold;
     let key = keygen(index, threshold, parties, address, &room_id)
         .await
-        .context("failed to generate key")
-        .unwrap();
-
-    let local_key: LocalKey<Secp256k1> = serde_json::from_str(&key).unwrap();
-    let public_key = local_key.public_key().to_bytes(true).to_vec();
-    let public_key_hex = hex::encode(&public_key);
-    status::Custom(
-        Status::Ok,
-        json!({
-            "key": key,
-            "pub_key": public_key_hex,
-            "threshold": threshold,
-            "parties": parties,
-        }),
-    )
+        .context("failed to generate key");
+    match key {
+        Ok(key) => {
+            let local_key: LocalKey<Secp256k1> = serde_json::from_str(&key).unwrap();
+            let public_key = local_key.public_key().to_bytes(true).to_vec();
+            let public_key_hex = hex::encode(&public_key);
+            status::Custom(
+                Status::Ok,
+                json!({
+                    "key": key,
+                    "pub_key": public_key_hex,
+                    "threshold": threshold,
+                    "parties": parties,
+                }),
+            )
+        }
+        Err(e) => {
+            error!("gen_key failed {:?}", e);
+            status::Custom(Status::InternalServerError, json!({"error": e.to_string()}))
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -77,6 +83,9 @@ pub async fn sign_message(token: Token, request: Json<KeySignReq<'_>>) -> status
                 "parties": parties,
             }),
         ),
-        Err(e) => status::Custom(Status::InternalServerError, json!({"error": e.to_string()})),
+        Err(e) => {
+            error!("sign_message failed {:?}", e);
+            status::Custom(Status::InternalServerError, json!({"error": e.to_string()}))
+        }
     }
 }

@@ -15,6 +15,7 @@ use ecdsa::gg_2020::{
 
 mod ecdsa;
 mod from_request;
+mod response;
 mod token;
 
 use token::gen_token;
@@ -31,6 +32,7 @@ lazy_static! {
 #[catch(404)]
 fn not_found() -> Value {
     json!({
+        "code": 400,
         "message": "source not found"
     })
 }
@@ -42,7 +44,8 @@ fn default_catcher(status: Status, req: &Request<'_>) -> Custom<Value> {
         json!({
             "uri": req.uri(),
             "code": status.code,
-            "reason": status.reason_lossy(),
+            "reason": format!("{}", status.clone()),
+            "message": status.reason_lossy(),
         }),
     )
 }

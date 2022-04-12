@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use crate::ecdsa::gg_2018::common::party_key_pub_hex;
-use crate::ecdsa::gg_2018::keygen::keygen_key;
+use crate::ecdsa::gg_2018::keygen::keygen;
 use crate::ecdsa::gg_2018::sign::sign;
 
 use crate::api::ecdsa::adapter::get_adapter;
@@ -29,7 +29,7 @@ pub async fn gen_key(
     let parties = request.parties;
     let threshold = request.threshold;
     let adapter = get_adapter(store);
-    let gen_key = keygen_key(parties, threshold, &room_id, &adapter).await;
+    let gen_key = keygen(parties, threshold, &room_id, &adapter).await;
     let pub_hex = party_key_pub_hex(&gen_key);
     status::Custom(
         Status::Ok,
