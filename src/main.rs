@@ -6,7 +6,7 @@ use dotenv::dotenv;
 use rocket::{
     data::{Limits, ToByteUnit},
     fairing::AdHoc,
-    Config,
+    Config, Ignite,
 };
 
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ mod state;
 use crate::state::db::Db;
 
 #[allow(dead_code)]
-async fn gg18() -> Result<(), rocket::Error> {
+async fn gg18() -> Result<rocket::Rocket<Ignite>, rocket::Error> {
     let db: HashMap<String, String> = HashMap::new();
     let state = RwLock::new(db);
     rocket::build()
@@ -33,7 +33,7 @@ async fn gg18() -> Result<(), rocket::Error> {
 }
 
 #[allow(dead_code)]
-async fn gg20() -> Result<(), rocket::Error> {
+async fn gg20() -> Result<rocket::Rocket<Ignite>, rocket::Error> {
     let state = Db::empty();
     let figment = rocket::Config::figment()
         .merge(("limits", Limits::new().limit("string", 100_i32.megabytes())));
@@ -48,11 +48,12 @@ async fn gg20() -> Result<(), rocket::Error> {
 }
 
 #[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
+async fn main() -> Result<(), anyhow::Error> {
     dotenv().ok();
 
-    match *api::GG_18 {
-        true => gg18().await,
-        false => gg20().await,
-    }
+    let _ = match *api::GG_18 {
+        true => gg18().await?,
+        false => gg20().await?,
+    };
+    Ok(())
 }
