@@ -11,7 +11,7 @@ use crate::ecdsa::gg_2018::common::party_key_pub_hex;
 use crate::ecdsa::gg_2018::keygen::keygen;
 use crate::ecdsa::gg_2018::sign::sign;
 
-use crate::api::ecdsa::adapter::get_adapter;
+use crate::api::ecdsa::gg_2018::adapter::get_adapter;
 use crate::api::from_request::token::Token;
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]

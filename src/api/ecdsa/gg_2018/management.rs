@@ -6,7 +6,7 @@ use rocket::State;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use crate::api::ecdsa::adapter::{get_store_adapter, Entry, Index, PartySignupReq};
+use crate::api::ecdsa::gg_2018::adapter::{get_store_adapter, Entry, Index, PartySignupReq};
 
 #[post("/get-entry", format = "json", data = "<request>")]
 pub async fn get_entry(

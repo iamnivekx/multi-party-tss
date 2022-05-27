@@ -125,7 +125,7 @@ pub fn get_store_adapter<'a>(
 #[cfg(test)]
 pub mod test {
     use super::get_adapter;
-    use crate::api::ecdsa::adapter::Entry;
+    use crate::api::ecdsa::gg_2018::adapter::Entry;
     use dotenv::dotenv;
     use std::collections::HashMap;
     use std::sync::RwLock;

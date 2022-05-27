@@ -10,7 +10,12 @@ use ecdsa::gg_2018::distributed::{gen_key, sign_message};
 use ecdsa::gg_2018::management::{get_entry, set_entry, signup_party};
 use ecdsa::gg_2020::{
     distributed::{gen_key as gg20_gen_key, sign_message as gg20_sign_message},
+    key::{key_gen_key as gg_20_key_gen_key, key_sign_message as gg_20_key_sign_message},
     management::{broadcast, issue_idx, subscribe},
+    gateway::{
+        gen_keys as gg_20_gateway_key_gen_key,
+        sign_message as  gg_20_gateway_sign_message,
+    },
 };
 
 mod ecdsa;
@@ -72,6 +77,14 @@ pub fn stage() -> rocket::fairing::AdHoc {
                 .mount(
                     "/ecdsa/gg_20/distributed/",
                     routes![gg20_gen_key, gg20_sign_message],
+                )
+                .mount(
+                    "/ecdsa/gg_20/pub_key/",
+                    routes![gg_20_key_gen_key, gg_20_key_sign_message],
+                )
+                .mount(
+                    "/ecdsa/gg_20/gateway/",
+                    routes![gg_20_gateway_key_gen_key, gg_20_gateway_sign_message],
                 ),
         }
     })

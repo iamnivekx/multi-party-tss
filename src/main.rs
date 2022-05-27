@@ -1,5 +1,9 @@
 #[macro_use]
 extern crate rocket;
+extern crate dotenv;
+
+#[macro_use]
+extern crate diesel;
 
 use dotenv::dotenv;
 
@@ -12,8 +16,11 @@ use rocket::{
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-mod api;
-mod ecdsa;
+pub mod api;
+pub mod ecdsa;
+pub mod lib;
+pub mod models;
+pub mod schema;
 mod state;
 
 use crate::state::db::Db;

@@ -33,6 +33,8 @@ curv = { package = "curv-kzen", version = "0.9", default-features = false }
 centipede = { version = "0.3", default-features = false }
 sha2 = "0.9"
 
+diesel = { version = "1.4.4", features = ["postgres"] }
+
 [dependencies.multi-party-ecdsa]
 git = "https://github.com/KZen-networks/multi-party-ecdsa"
 

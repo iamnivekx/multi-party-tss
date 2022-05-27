@@ -8,7 +8,6 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::sig
 };
 use round_based::async_runtime::AsyncProtocol;
 use round_based::Msg;
-use serde_json::json;
 
 use crate::ecdsa::gg_2020::sm_client::join_computation;
 
@@ -38,7 +37,7 @@ pub async fn sign(
         .await
         .map_err(|e| anyhow!("protocol execution terminated with error: {}", e))?;
 
-    let (_i, incoming, outgoing) = join_computation(address, &format!("{}-online", room_id))
+    let (i, incoming, outgoing) = join_computation(address, &format!("{}-online", room_id))
         .await
         .context("join online computation")?;
 
@@ -66,15 +65,11 @@ pub async fn sign(
     let sig = signing
         .complete(&partial_signatures)
         .context("online stage failed")?;
-    // let signature = serde_json::to_string(&signature).context("serialize signature")?;
 
-    let signature = json!({
-        "r": BigInt::from_bytes(sig.r.to_bytes().as_ref()).to_str_radix(16),
-        "s": BigInt::from_bytes(sig.s.to_bytes().as_ref()).to_str_radix(16),
-        "v": sig.recid.clone(),
-    })
-    .to_string();
-
+    let r = BigInt::from_bytes(sig.r.to_bytes().as_ref()).to_str_radix(16);
+    let s = BigInt::from_bytes(sig.s.to_bytes().as_ref()).to_str_radix(16);
+    let v = sig.recid;
+    let signature = format!("{:0>width$}{:0>width$}{:02x}", r, s, v, width=64);
     Ok(signature)
 }
 

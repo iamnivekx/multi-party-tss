@@ -90,6 +90,7 @@ impl SmClient {
             .get("subscribe")
             .await
             .map_err(|e| e.into_inner())?;
+
         let events = async_sse::decode(response);
         Ok(events.filter_map(|msg| async {
             match msg {

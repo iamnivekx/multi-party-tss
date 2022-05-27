@@ -2,8 +2,8 @@ FROM rust:1.54 as builder
 
 WORKDIR /usr/src
 
-RUN rustup toolchain install nightly-2021-08-31 \
-    && rustup default nightly-2021-08-31
+RUN rustup toolchain install nightly-2022-05-20 \
+    && rustup default nightly-2022-05-20
 
 RUN apt-get update \
     && apt-get install -y ca-certificates tzdata libcurl4 \

@@ -10,7 +10,7 @@
 
 ### Services
 
-#### Manager 
+#### Manager
 
 Store the exchange data signup parties
 
