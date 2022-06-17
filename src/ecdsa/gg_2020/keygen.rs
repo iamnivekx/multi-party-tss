@@ -5,13 +5,15 @@ use futures::StreamExt;
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::Keygen;
 use round_based::async_runtime::AsyncProtocol;
 
+use crate::ecdsa::common::party_key_compress_pub_hex;
+
 pub async fn keygen(
     index: u16,
     threshold: u16,
     parties: u16,
     address: surf::Url,
     room_id: &str,
-) -> Result<String, anyhow::Error> {
+) -> Result<(String, String), anyhow::Error> {
     let (_i, incoming, outgoing) = join_computation(address, room_id)
         .await
         .context("join computation")?;
@@ -20,13 +22,15 @@ pub async fn keygen(
     tokio::pin!(incoming);
     tokio::pin!(outgoing);
     let keygen = Keygen::new(index, threshold, parties)?;
-    let output = AsyncProtocol::new(keygen, incoming, outgoing)
+    let local_key = AsyncProtocol::new(keygen, incoming, outgoing)
         .run()
         .await
         .map_err(|e| anyhow!("protocol execution terminated with error: {}", e))?;
-    let output = serde_json::to_string(&output).context("serialize output")?;
+    let pk = local_key.public_key();
+    let pk_hex = party_key_compress_pub_hex(&pk);
+    let serialize_output = serde_json::to_string(&local_key).context("serialize output")?;
 
-    Ok(output)
+    Ok((pk_hex, serialize_output))
 }
 
 #[cfg(test)]

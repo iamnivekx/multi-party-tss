@@ -1,14 +1,17 @@
 use anyhow::{anyhow, Context, Ok, Result};
 use curv::arithmetic::Converter;
+use curv::elliptic::curves::secp256_k1::Secp256k1;
 use curv::BigInt;
 use futures::{SinkExt, StreamExt, TryStreamExt};
 
+use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::LocalKey;
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::sign::{
     OfflineStage, SignManual,
 };
 use round_based::async_runtime::AsyncProtocol;
 use round_based::Msg;
 
+use crate::ecdsa::common::check_sig;
 use crate::ecdsa::gg_2020::sm_client::join_computation;
 
 #[allow(dead_code)]
@@ -19,9 +22,11 @@ pub async fn sign(
     address: surf::Url,
     room_id: &str,
 ) -> Result<String, anyhow::Error> {
+    let message = BigInt::from_hex(message).context("invalid hex")?;
     let number_of_parties = parties.len();
-    let local_share = serde_json::from_slice(&share_key.as_bytes()).context("parse local share")?;
-
+    let local_share: LocalKey<Secp256k1> =
+        serde_json::from_slice(&share_key.as_bytes()).context("parse local share")?;
+    let pk = local_share.public_key();
     let (i, incoming, outgoing) =
         join_computation(address.clone(), &format!("{}-offline", room_id))
             .await
@@ -44,10 +49,7 @@ pub async fn sign(
     tokio::pin!(incoming);
     tokio::pin!(outgoing);
 
-    let (signing, partial_signature) = SignManual::new(
-        BigInt::from_bytes(message.as_bytes()),
-        completed_offline_stage,
-    )?;
+    let (signing, partial_signature) = SignManual::new(message.clone(), completed_offline_stage)?;
 
     outgoing
         .send(Msg {
@@ -66,10 +68,16 @@ pub async fn sign(
         .complete(&partial_signatures)
         .context("online stage failed")?;
 
+    if check_sig(&sig.r, &sig.s, &message, &pk) == false {
+        return Err(anyhow!("something wrong. invalid signature"));
+    }
+
     let r = BigInt::from_bytes(sig.r.to_bytes().as_ref()).to_str_radix(16);
     let s = BigInt::from_bytes(sig.s.to_bytes().as_ref()).to_str_radix(16);
     let v = sig.recid;
-    let signature = format!("{:0>width$}{:0>width$}{:02x}", r, s, v, width=64);
+
+    let signature = format!("{:0>width$}{:0>width$}{:02x}", r, s, v, width = 64);
+
     Ok(signature)
 }
 
@@ -78,8 +86,17 @@ pub mod test {
 
     use super::sign;
     use anyhow::Ok;
+    use curv::arithmetic::Converter;
+    use curv::BigInt;
     use futures::future;
     use tokio::time::Duration;
+
+    #[tokio::test]
+    async fn test_big_vec() {
+        let message = "68656c6c6f20776f726c64";
+        let meessage = BigInt::from_hex(message).expect("invalid hex");
+        assert_eq!(meessage.to_hex(), "68656c6c6f20776f726c64");
+    }
 
     #[tokio::test]
     async fn test_sign_async() {
@@ -95,7 +112,7 @@ pub mod test {
 
             // TODO: could we change the sort order of the keys?
             let parties: Vec<u16> = vec![1, 2];
-            let message = "hello";
+            let message = "68656c6c6f20776f726c64";
             let room_id = "default-signing";
 
             let signature = sign(key, parties.clone(), message, address, room_id)

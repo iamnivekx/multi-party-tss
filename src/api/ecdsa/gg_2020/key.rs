@@ -1,7 +1,6 @@
 use anyhow::Context;
-use curv::elliptic::curves::Secp256k1;
 use lazy_static::lazy_static;
-use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::LocalKey;
+
 use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
 use std::env;
@@ -36,30 +35,32 @@ pub async fn key_gen_key(token: Token, request: Json<KeyGenReq>) -> Result<Value
     let index = request.index;
     let parties = request.parties;
     let threshold = request.threshold;
-    let key = keygen(index.clone(), threshold.clone(), parties.clone(), address, &room_id)
-        .await
-        .context("failed to generate key")
-        .map_err(|e| ApiError::Unknown(e))?;
+    let (pub_key, local_key) = keygen(
+        index.clone(),
+        threshold.clone(),
+        parties.clone(),
+        address,
+        &room_id,
+    )
+    .await
+    .context("failed to generate key")
+    .map_err(|e| ApiError::Unknown(e))?;
 
     let conn = establish_connection().map_err(|e| ApiError::Unknown(e))?;
 
-    let local_key: LocalKey<Secp256k1> =
-        serde_json::from_str(&key).context("failed to deserialize key")?;
-    let public_key = local_key.public_key().to_bytes(true).to_vec();
-    let public_key_hex = hex::encode(&public_key);
     let _id = Key::create_key(
         &conn,
         i32::from(index),
         i32::from(threshold.clone()),
         i32::from(parties.clone()),
-        public_key_hex.clone().as_str(),
-        key.as_str().clone(),
+        pub_key.clone().as_str(),
+        local_key.as_str().clone(),
     )
     .context("failed to store key")?;
 
     Ok(json!({
-        "key": key,
-        "pub_key": public_key_hex,
+        "key": local_key,
+        "pub_key": pub_key,
         "index": index,
         "threshold": threshold,
         "parties": parties,

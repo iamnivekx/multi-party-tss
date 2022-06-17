@@ -6,7 +6,7 @@ RUN rustup toolchain install nightly-2022-05-20 \
     && rustup default nightly-2022-05-20
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates tzdata libcurl4 \
+    && apt-get install -y ca-certificates tzdata libcurl4 libpq-dev ca-certificates netcat \
     && rm -rf /var/lib/apt/lists/*
 
 # 1. Create a new empty shell project
@@ -30,7 +30,7 @@ RUN cargo build --release
 FROM debian:buster-slim
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates tzdata libcurl4\
+    && apt-get install -y ca-certificates tzdata libcurl4 libpq-dev ca-certificates netcat \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/src/tss/target/release/tss /usr/local/bin/tss

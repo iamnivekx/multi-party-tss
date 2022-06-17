@@ -1,7 +1,5 @@
 use anyhow::Context;
-use curv::elliptic::curves::Secp256k1;
 use lazy_static::lazy_static;
-use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::LocalKey;
 use std::env;
 
 use rocket::http::Status;
@@ -39,20 +37,15 @@ pub async fn gen_key(token: Token, request: Json<KeyGenReq>) -> status::Custom<V
         .await
         .context("failed to generate key");
     match key {
-        Ok(key) => {
-            let local_key: LocalKey<Secp256k1> = serde_json::from_str(&key).unwrap();
-            let public_key = local_key.public_key().to_bytes(true).to_vec();
-            let public_key_hex = hex::encode(&public_key);
-            status::Custom(
-                Status::Ok,
-                json!({
-                    "key": key,
-                    "pub_key": public_key_hex,
-                    "threshold": threshold,
-                    "parties": parties,
-                }),
-            )
-        }
+        Ok((public_key, local_key)) => status::Custom(
+            Status::Ok,
+            json!({
+                "key": local_key,
+                "pub_key": public_key,
+                "threshold": threshold,
+                "parties": parties,
+            }),
+        ),
         Err(e) => {
             error!("gen_key failed {:?}", e);
             status::Custom(Status::InternalServerError, json!({"error": e.to_string()}))
