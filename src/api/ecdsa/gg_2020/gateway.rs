@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Context};
-use uuid::Uuid;
-use tokio::time::{sleep, Duration};
-use std::sync::Arc;
+use futures::future;
 use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
-use futures::future;
+use std::sync::Arc;
+use tokio::time::{sleep, Duration};
+use uuid::Uuid;
 
 use crate::api::response::error::ApiError;
 
@@ -25,7 +25,7 @@ pub struct PubKey {
     key: String,
     pub_key: String,
     parties: u16,
-    threshold: u16
+    threshold: u16,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -37,7 +37,7 @@ pub struct PubKeyIndex {
 }
 
 #[post("/keys", data = "<request>")]
-pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError>  {
+pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
     let nodes = request.nodes.to_vec();
     let nodes = Arc::new(nodes);
 
@@ -47,34 +47,50 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError>  {
     let room_id = Uuid::new_v4().to_string();
     let room_id = Arc::new(room_id);
 
-    let futures = (1..=parties).into_iter().map(|index| (index, nodes.clone(), room_id.clone())).map(|(index, nodes, room_id)| async move {
-        let parties = nodes.len() as u16;
-        let node = nodes[index as usize - 1].clone();
-        let mut url = surf::Url::parse(node.as_str()).context("url parse failed")?;
-        url.set_path("/ecdsa/gg_20/pub_key/keys");
-        
-        let body = json!({ "index": index, "threshold": threshold, "parties": parties });
-        sleep(Duration::from_millis(u64::from(index * 200))).await;
-        let mut res = surf::post(url).header("token", room_id.to_string()).body_json(&body).map_err(|e| anyhow!(e.to_string()))?.await.map_err(|e| anyhow!(e.to_string()))?;
-    
-        let body = res.body_string().await.map_err(|e| e.into_inner())?;
-        let result = if res.status() == 200 {
-            let pub_key: PubKey = serde_json::from_str(body.as_str()).map_err(|e|anyhow!("failed to decode the body {}", e))?;
-            anyhow::Ok((pub_key, node))
-        } else {
-            let error: ErrorMsg = serde_json::from_str(body.as_str()).context("failed to decode the error body")?;
-            Err(anyhow!("failed to compute the key {}", error.error).into())
-        };
-        result
-    });
-    let keys: Vec<anyhow::Result<(PubKey, String), anyhow::Error>>  = future::join_all(futures).await;
+    let futures = (1..=parties)
+        .into_iter()
+        .map(|index| (index, nodes.clone(), room_id.clone()))
+        .map(|(index, nodes, room_id)| async move {
+            let parties = nodes.len() as u16;
+            let node = nodes[index as usize - 1].clone();
+            let mut url = surf::Url::parse(node.as_str()).context("url parse failed")?;
+            url.set_path("/ecdsa/gg_20/pub_key/keys");
+
+            let body = json!({ "index": index, "threshold": threshold, "parties": parties });
+            sleep(Duration::from_millis(u64::from(index * 200))).await;
+            let mut res = surf::post(url)
+                .header("token", room_id.to_string())
+                .body_json(&body)
+                .map_err(|e| anyhow!(e.to_string()))?
+                .await
+                .map_err(|e| anyhow!(e.to_string()))?;
+
+            let body = res.body_string().await.map_err(|e| e.into_inner())?;
+            let result = if res.status() == 200 {
+                let pub_key: PubKey = serde_json::from_str(body.as_str())
+                    .map_err(|e| anyhow!("failed to decode the body {}", e))?;
+                anyhow::Ok((pub_key, node))
+            } else {
+                let error: ErrorMsg = serde_json::from_str(body.as_str())
+                    .context("failed to decode the error body")?;
+                Err(anyhow!("failed to compute the key {}", error.error).into())
+            };
+            result
+        });
+    let keys: Vec<anyhow::Result<(PubKey, String), anyhow::Error>> =
+        future::join_all(futures).await;
     let mut pub_keys: Vec<PubKeyIndex> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
     let mut pub_key = "".to_string();
     keys.into_iter().for_each(|key| {
         if let Ok(key) = key {
             pub_key = key.0.pub_key.clone();
-            pub_keys.push(PubKeyIndex { index: key.0.index, parties: key.0.parties, threshold: key.0.threshold, node: key.1.clone() });
+            pub_keys.push(PubKeyIndex {
+                index: key.0.index,
+                parties: key.0.parties,
+                threshold: key.0.threshold,
+                node: key.1.clone(),
+            });
         } else {
             errors.push(key.unwrap_err().to_string());
         }
@@ -88,14 +104,13 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError>  {
         "pub_key": pub_key,
         "keys": pub_keys,
     }))
-    
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct KeySignReq {
     pub_key: String,
     message: String,
-    nodes:Vec<PubKeyIndex>,
+    nodes: Vec<PubKeyIndex>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -113,6 +128,11 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
     let pub_key = Arc::new(pub_key);
 
     let message = request.message.to_string();
+
+    if message.len() > 64 {
+        return Err(anyhow!("the message length over 64 bytes {:?}", message.len()).into());
+    }
+
     let message = Arc::new(message);
 
     let mut nodes: Vec<PubKeyIndex> = request.nodes.to_vec();
@@ -144,8 +164,8 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
         };
         result
     });
-    
-    let result: Vec<anyhow::Result<(Sig, String), anyhow::Error>>  = future::join_all(futures).await;
+
+    let result: Vec<anyhow::Result<(Sig, String), anyhow::Error>> = future::join_all(futures).await;
 
     let mut signatures: Vec<Sig> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
@@ -168,17 +188,14 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
     }))
 }
 
-
-
-
 #[cfg(test)]
 pub mod test {
-    use uuid::Uuid;
     use anyhow::{anyhow, Context, Result};
+    use futures::future;
+    use rocket::serde::json::json;
     use std::sync::Arc;
     use tokio::time::{sleep, Duration};
-    use rocket::serde::json::json;
-    use futures::future;
+    use uuid::Uuid;
 
     use super::PubKeyIndex;
 
@@ -186,7 +203,11 @@ pub mod test {
     async fn test_async_keygen() -> Result<()> {
         let parties: u16 = 3;
         let threshold = 1;
-        let nodes = vec![ "http://localhost:8000",  "http://localhost:8000",  "http://localhost:8000"];
+        let nodes = vec![
+            "http://localhost:8000",
+            "http://localhost:8000",
+            "http://localhost:8000",
+        ];
         let nodes = Arc::new(nodes);
         let room_id = Uuid::new_v4().to_string();
         let room_id = Arc::new(room_id);
@@ -202,7 +223,12 @@ pub mod test {
             anyhow::Ok(body)
         });
         let keys: Vec<anyhow::Result<String, anyhow::Error>> = future::join_all(futures).await;
-        println!("{:?}", keys.into_iter().map(|res| res.unwrap_or_else(|e| e.to_string())).collect::<Vec<String>>());
+        println!(
+            "{:?}",
+            keys.into_iter()
+                .map(|res| res.unwrap_or_else(|e| e.to_string()))
+                .collect::<Vec<String>>()
+        );
         Ok(())
     }
 
@@ -219,10 +245,19 @@ pub mod test {
         let room_id = Uuid::new_v4().to_string();
         let room_id = Arc::new(room_id);
 
-
         let keys = vec![
-            PubKeyIndex{ index: 1, parties: parties, threshold: threshold, node: "http://localhost:8000".to_string() },
-            PubKeyIndex{ index: 2, parties: parties, threshold: threshold, node: "http://localhost:8000".to_string() },
+            PubKeyIndex {
+                index: 1,
+                parties: parties,
+                threshold: threshold,
+                node: "http://localhost:8000".to_string(),
+            },
+            PubKeyIndex {
+                index: 2,
+                parties: parties,
+                threshold: threshold,
+                node: "http://localhost:8000".to_string(),
+            },
         ];
         let keys = Arc::new(keys);
 
@@ -244,7 +279,12 @@ pub mod test {
             anyhow::Ok(body)
         });
         let keys: Vec<anyhow::Result<String, anyhow::Error>> = future::join_all(futures).await;
-        println!("{:?}", keys.into_iter().map(|res| res.unwrap_or_else(|e| e.to_string())).collect::<Vec<String>>());
+        println!(
+            "{:?}",
+            keys.into_iter()
+                .map(|res| res.unwrap_or_else(|e| e.to_string()))
+                .collect::<Vec<String>>()
+        );
         Ok(())
     }
 }

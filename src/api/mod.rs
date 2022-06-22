@@ -5,17 +5,16 @@ use rocket::serde::json::{json, Value};
 use rocket::Request;
 use std::env;
 
-use ecdsa::gg_2018::centralized::{gen_keys, signatures};
-use ecdsa::gg_2018::distributed::{gen_key, sign_message};
-use ecdsa::gg_2018::management::{get_entry, set_entry, signup_party};
+use ecdsa::gg_2018::{
+    centralized::{gen_keys, signatures},
+    distributed::{gen_key, sign_message},
+    management::{get_entry, set_entry, signup_party},
+};
 use ecdsa::gg_2020::{
     distributed::{gen_key as gg20_gen_key, sign_message as gg20_sign_message},
+    gateway::{gen_keys as gg_20_gateway_key_gen_key, sign_message as gg_20_gateway_sign_message},
     key::{key_gen_key as gg_20_key_gen_key, key_sign_message as gg_20_key_sign_message},
     management::{broadcast, issue_idx, subscribe},
-    gateway::{
-        gen_keys as gg_20_gateway_key_gen_key,
-        sign_message as  gg_20_gateway_sign_message,
-    },
 };
 
 mod ecdsa;

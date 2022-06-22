@@ -13,6 +13,7 @@ pub enum ApiError {
     Unknown(anyhow::Error),
     #[error("{0}")]
     DatabaseError(diesel::result::Error),
+
 }
 
 impl From<anyhow::Error> for ApiError {
