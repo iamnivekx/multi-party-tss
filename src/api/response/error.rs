@@ -10,10 +10,11 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ApiError {
     #[error("{0:#}")]
+    BadRequest(anyhow::Error),
+    #[error("{0:#}")]
     Unknown(anyhow::Error),
     #[error("{0}")]
     DatabaseError(diesel::result::Error),
-
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -39,10 +40,14 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for ApiError {
         );
         let desc = json!({ "error": description.to_string() });
         let body = Cursor::new(format!("{}", desc.to_string()));
+        let status = match self {
+            ApiError::BadRequest(_) => Status::BadRequest,
+            _ => Status::InternalServerError,
+        };
         Response::build()
             .header(ContentType::JSON)
             .streamed_body(body)
-            .status(Status::InternalServerError)
+            .status(status)
             .ok()
     }
 }

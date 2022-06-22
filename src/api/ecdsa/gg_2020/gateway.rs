@@ -130,7 +130,10 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
     let message = request.message.to_string();
 
     if message.len() > 64 {
-        return Err(anyhow!("the message length over 64 bytes {:?}", message.len()).into());
+        return Err(ApiError::BadRequest(anyhow!(
+            "the message length over 64 bytes {:?}",
+            message.len()
+        )));
     }
 
     let message = Arc::new(message);
