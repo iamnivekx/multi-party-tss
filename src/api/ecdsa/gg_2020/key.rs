@@ -87,7 +87,7 @@ pub async fn key_sign_message(
     let pub_key = request.pub_key.to_string();
     let key = Key::find_by_pub_key(&conn, pub_key.clone(), index.map(|v| i32::from(v)))
         .context("failed to find key")
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| ApiError::BadRequest(anyhow::anyhow!("{}", e)))?;
     let body = key.body.clone();
     let message = request.message;
     let parties = request.parties.clone();

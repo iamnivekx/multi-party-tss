@@ -1,5 +1,5 @@
 use diesel::pg::PgConnection;
-use diesel::{prelude::*, debug_query};
+use diesel::{debug_query, prelude::*};
 use diesel::{delete, insert_into};
 use rocket::serde::{Deserialize, Serialize};
 use std::time::SystemTime;
@@ -76,7 +76,10 @@ impl Key {
         if let Some(idx) = idx {
             query = query.filter(keys::idx.eq(idx));
         }
-        info!("sql {}", debug_query::<diesel::pg::Pg, _>(&query).to_string());
+        info!(
+            "sql {}",
+            debug_query::<diesel::pg::Pg, _>(&query).to_string()
+        );
         query.order(keys::id).first::<Key>(conn)
     }
 

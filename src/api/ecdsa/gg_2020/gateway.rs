@@ -3,11 +3,13 @@ use futures::future;
 use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use surf::StatusCode;
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
 use crate::api::response::error::ApiError;
 
+pub const NODE_DELAY: u16 = 20;
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ErrorMsg {
     error: String,
@@ -57,7 +59,7 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
             url.set_path("/ecdsa/gg_20/pub_key/keys");
 
             let body = json!({ "index": index, "threshold": threshold, "parties": parties });
-            sleep(Duration::from_millis(u64::from(index * 200))).await;
+            sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
             let mut res = surf::post(url)
                 .header("token", room_id.to_string())
                 .body_json(&body)
@@ -66,16 +68,20 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
                 .map_err(|e| anyhow!(e.to_string()))?;
 
             let body = res.body_string().await.map_err(|e| e.into_inner())?;
-            let result = if res.status() == 200 {
-                let pub_key: PubKey = serde_json::from_str(body.as_str())
-                    .map_err(|e| anyhow!("failed to decode the body {}", e))?;
-                anyhow::Ok((pub_key, node))
-            } else {
-                let error: ErrorMsg = serde_json::from_str(body.as_str())
-                    .context("failed to decode the error body")?;
-                Err(anyhow!("failed to compute the key {}", error.error).into())
-            };
-            result
+            let status = res.status();
+            match status {
+                StatusCode::Ok => {
+                    let pub_key: PubKey = serde_json::from_str(body.as_str())
+                        .map_err(|e| anyhow!("failed to decode the body {}", e))?;
+                    anyhow::Ok((pub_key, node))
+                }
+                StatusCode::BadGateway => Err(anyhow!("failed to connect the endpoint {}", node)),
+                _ => {
+                    let error: ErrorMsg = serde_json::from_str(body.as_str())
+                        .context("failed to decode the error body")?;
+                    Err(anyhow!("failed to compute the key {}", error.error).into())
+                }
+            }
         });
     let keys: Vec<anyhow::Result<(PubKey, String), anyhow::Error>> =
         future::join_all(futures).await;
@@ -97,7 +103,7 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
     });
     if errors.len() > 0 {
         return Err(anyhow!("{}", errors.join("\n"))
-            .context("failed to generate key")
+            .context("[Gateway] failed to generate key")
             .into());
     }
     Ok(json!({
@@ -155,17 +161,22 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
         url.set_path("/ecdsa/gg_20/pub_key/sign");
 
         let body = json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
-        sleep(Duration::from_millis(u64::from(index * 200))).await;
+        sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
         let mut res = surf::post(url).header("token", room_id.to_string()).body_json(&body).map_err(|e| anyhow!(e.into_inner()))?.await.map_err(|e| anyhow!("fetch from node {} {}", node, e.into_inner()))?;
         let body = res.body_string().await.map_err(|e| e.into_inner())?;
-        let result = if res.status() == 200 {
-            let sig: Sig = serde_json::from_str(body.as_str()).map_err(|e|anyhow!("failed to decode the body {} {}", node, e))?;
-            anyhow::Ok((sig, node.to_string()))
-        } else {
-            let error: ErrorMsg = serde_json::from_str(body.as_str()).context("failed to decode the error body")?;
-            Err(anyhow!("failed to compute the signature {} {}",  node, error.error).into())
-        };
-        result
+        let status = res.status();
+        match status {
+            StatusCode::Ok => {
+                let sig: Sig = serde_json::from_str(body.as_str()).map_err(|e|anyhow!("failed to decode the body {} {}", node, e))?;
+                anyhow::Ok((sig, node.to_string()))
+            },
+            StatusCode::BadGateway => Err(anyhow!("failed to connect the endpoint {}", node)),
+            _ => {
+                let error: ErrorMsg = serde_json::from_str(body.as_str()).context("failed to decode the error body")?;
+                Err(anyhow!("failed to compute the key {} {}", node, error.error).into())
+            }
+        }
+       
     });
 
     let result: Vec<anyhow::Result<(Sig, String), anyhow::Error>> = future::join_all(futures).await;
@@ -193,6 +204,7 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
 
 #[cfg(test)]
 pub mod test {
+    use super::NODE_DELAY;
     use anyhow::{anyhow, Context, Result};
     use futures::future;
     use rocket::serde::json::json;
@@ -220,7 +232,7 @@ pub mod test {
             let mut url = surf::Url::parse(node).context("build url failed")?;
             url.set_path("/ecdsa/gg_20/pub_key/keys");
             let body = json!({ "index": index.clone(), "threshold": threshold.clone(), "parties": parties.clone() });
-            sleep(Duration::from_millis(u64::from(index * 200))).await;
+            sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
             let mut res = surf::post(url).header("token", room_id.to_string()).body_json(&body).map_err(|e| anyhow!(e.to_string())).context("Build request failed")?.await.map_err(|e| anyhow!(e.to_string())).context("Failed to fetch from nodes")?;
             let body = res.body_string().await.map_err(|e| anyhow!(e.to_string())).context("failed to get body")?;
             anyhow::Ok(body)
@@ -276,7 +288,7 @@ pub mod test {
             let mut url = surf::Url::parse(node.as_str()).context("build url failed")?;
             url.set_path("/ecdsa/gg_20/pub_key/sign");
             let body = json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
-            sleep(Duration::from_millis(u64::from(index * 200))).await;
+            sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
             let mut res = surf::post(url).header("token", room_id.to_string()).body_json(&body).map_err(|e| anyhow!(e.to_string())).context("Build request failed")?.await.map_err(|e| anyhow!(e.to_string())).context("Failed to fetch from nodes")?;
             let body = res.body_string().await.map_err(|e| anyhow!(e.to_string())).context("failed to get body")?;
             anyhow::Ok(body)

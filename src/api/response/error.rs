@@ -32,18 +32,19 @@ impl From<diesel::result::Error> for ApiError {
 impl<'r, 'o: 'r> Responder<'r, 'o> for ApiError {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'o> {
         let description = self.to_string();
-        error!(
-            "Request uri {} ,method {}, response {} ",
-            req.uri(),
-            req.method(),
-            description
-        );
         let desc = json!({ "error": description.to_string() });
         let body = Cursor::new(format!("{}", desc.to_string()));
         let status = match self {
             ApiError::BadRequest(_) => Status::BadRequest,
             _ => Status::InternalServerError,
         };
+        error!(
+            "Request status {}, uri {}, method {}, response {}",
+            status.clone(),
+            req.uri(),
+            req.method(),
+            description
+        );
         Response::build()
             .header(ContentType::JSON)
             .streamed_body(body)
