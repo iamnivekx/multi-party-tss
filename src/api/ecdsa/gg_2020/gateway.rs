@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::api::response::error::ApiError;
 
 pub const NODE_DELAY: u16 = 20;
+pub const NODE_DEADLINE: u64 = 60 * 2;
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ErrorMsg {
     error: String,
@@ -38,6 +39,43 @@ pub struct PubKeyIndex {
     node: String,
 }
 
+async fn request_key_gen(
+    room_id: String,
+    threshold: u16,
+    parties: u16,
+    index: u16,
+    node: String,
+) -> Result<(PubKey, String), anyhow::Error> {
+    let mut url = surf::Url::parse(node.as_str()).context("url parse failed")?;
+    url.set_path("/ecdsa/gg_20/pub_key/keys");
+
+    let body = json!({ "index": index, "threshold": threshold, "parties": parties });
+
+    sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
+    let mut res = surf::post(url)
+        .header("token", room_id.to_string())
+        .body_json(&body)
+        .map_err(|e| anyhow!(e.to_string()))?
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
+
+    let body = res.body_string().await.map_err(|e| e.into_inner())?;
+    let status = res.status();
+    match status {
+        StatusCode::Ok => {
+            let pub_key: PubKey = serde_json::from_str(body.as_str())
+                .map_err(|e| anyhow!("failed to decode the body {}", e))?;
+            anyhow::Ok((pub_key, node))
+        }
+        StatusCode::BadGateway => Err(anyhow!("failed to connect the endpoint {}", node)),
+        _ => {
+            let error: ErrorMsg =
+                serde_json::from_str(body.as_str()).context("failed to decode the error body")?;
+            Err(anyhow!("failed to compute the key {}", error.error).into())
+        }
+    }
+}
+
 #[post("/keys", data = "<request>")]
 pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
     let nodes = request.nodes.to_vec();
@@ -55,32 +93,30 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
         .map(|(index, nodes, room_id)| async move {
             let parties = nodes.len() as u16;
             let node = nodes[index as usize - 1].clone();
-            let mut url = surf::Url::parse(node.as_str()).context("url parse failed")?;
-            url.set_path("/ecdsa/gg_20/pub_key/keys");
 
-            let body = json!({ "index": index, "threshold": threshold, "parties": parties });
-            sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
-            let mut res = surf::post(url)
-                .header("token", room_id.to_string())
-                .body_json(&body)
-                .map_err(|e| anyhow!(e.to_string()))?
-                .await
-                .map_err(|e| anyhow!(e.to_string()))?;
-
-            let body = res.body_string().await.map_err(|e| e.into_inner())?;
-            let status = res.status();
-            match status {
-                StatusCode::Ok => {
-                    let pub_key: PubKey = serde_json::from_str(body.as_str())
-                        .map_err(|e| anyhow!("failed to decode the body {}", e))?;
-                    anyhow::Ok((pub_key, node))
+            match tokio::time::timeout(
+                Duration::from_secs(NODE_DEADLINE),
+                request_key_gen(
+                    room_id.to_string(),
+                    threshold.clone(),
+                    parties,
+                    index,
+                    node.clone(),
+                ),
+            )
+            .await
+            .map_err(anyhow::Error::from)
+            {
+                Ok(Err(e)) | Err(e) => {
+                    let message = format!(
+                        "node {} compute the key failed {}",
+                        node.clone(),
+                        e.to_string()
+                    );
+                    error!("compute failed {:?}", message.to_string());
+                    Err(anyhow!(message))
                 }
-                StatusCode::BadGateway => Err(anyhow!("failed to connect the endpoint {}", node)),
-                _ => {
-                    let error: ErrorMsg = serde_json::from_str(body.as_str())
-                        .context("failed to decode the error body")?;
-                    Err(anyhow!("failed to compute the key {}", error.error).into())
-                }
+                Ok(Ok(ret)) => Ok(ret),
             }
         });
     let keys: Vec<anyhow::Result<(PubKey, String), anyhow::Error>> =
@@ -102,8 +138,8 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
         }
     });
     if errors.len() > 0 {
-        return Err(anyhow!("{}", errors.join("\n"))
-            .context("[Gateway] failed to generate key")
+        return Err(anyhow!("{}", errors.join(" \n "))
+            .context("failed to generate key")
             .into());
     }
     Ok(json!({
@@ -125,6 +161,44 @@ pub struct Sig {
     parties: Vec<u16>,
     signature: String,
 }
+
+async fn request_sign_message(
+    room_id: String,
+    pub_key: String,
+    parties: Vec<u16>,
+    index: u16,
+    node: String,
+    message: String,
+) -> Result<(Sig, String), anyhow::Error> {
+    let mut url = surf::Url::parse(node.as_str().clone()).context("build url failed")?;
+    url.set_path("/ecdsa/gg_20/pub_key/sign");
+
+    let body =
+        json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
+    sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
+    let mut res = surf::post(url)
+        .header("token", room_id.to_string())
+        .body_json(&body)
+        .map_err(|e| anyhow!(e.into_inner()))?
+        .await
+        .map_err(|e| anyhow!("fetch from node {} {}", node, e.into_inner()))?;
+    let body = res.body_string().await.map_err(|e| e.into_inner())?;
+    let status = res.status();
+    match status {
+        StatusCode::Ok => {
+            let sig: Sig = serde_json::from_str(body.as_str())
+                .map_err(|e| anyhow!("failed to decode the body {} {}", node, e))?;
+            anyhow::Ok((sig, node.to_string()))
+        }
+        StatusCode::BadGateway => Err(anyhow!("failed to connect the endpoint {}", node)),
+        _ => {
+            let error: ErrorMsg =
+                serde_json::from_str(body.as_str()).context("failed to decode the error body")?;
+            Err(anyhow!("failed to compute the key {} {}", node, error.error).into())
+        }
+    }
+}
+
 #[post("/sign", data = "<request>")]
 pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> {
     let room_id = Uuid::new_v4().to_string();
@@ -150,34 +224,50 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
     let parties: Vec<u16> = nodes.iter().map(|i| i.index).collect::<Vec<u16>>();
     let parties = Arc::new(parties);
 
-    let futures = nodes.into_iter().map(|key| (key, pub_key.clone(), message.clone(), parties.clone(), room_id.clone())).map(|(key, pub_key, message ,parties, room_id)| async move {
-        let pub_key = pub_key.to_string();
-        let message = message.to_string();
-        let parties = parties.to_vec();
-        let index = key.index;
-        let node = key.node;
+    let futures = nodes
+        .into_iter()
+        .map(|key| {
+            (
+                key,
+                pub_key.clone(),
+                message.clone(),
+                parties.clone(),
+                room_id.clone(),
+            )
+        })
+        .map(|(key, pub_key, message, parties, room_id)| async move {
+            let pub_key = pub_key.to_string();
+            let message = message.to_string();
+            let parties = parties.to_vec();
+            let index = key.index;
+            let node = key.node;
 
-        let mut url = surf::Url::parse(node.as_str().clone()).context("build url failed")?;
-        url.set_path("/ecdsa/gg_20/pub_key/sign");
-
-        let body = json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
-        sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
-        let mut res = surf::post(url).header("token", room_id.to_string()).body_json(&body).map_err(|e| anyhow!(e.into_inner()))?.await.map_err(|e| anyhow!("fetch from node {} {}", node, e.into_inner()))?;
-        let body = res.body_string().await.map_err(|e| e.into_inner())?;
-        let status = res.status();
-        match status {
-            StatusCode::Ok => {
-                let sig: Sig = serde_json::from_str(body.as_str()).map_err(|e|anyhow!("failed to decode the body {} {}", node, e))?;
-                anyhow::Ok((sig, node.to_string()))
-            },
-            StatusCode::BadGateway => Err(anyhow!("failed to connect the endpoint {}", node)),
-            _ => {
-                let error: ErrorMsg = serde_json::from_str(body.as_str()).context("failed to decode the error body")?;
-                Err(anyhow!("failed to compute the key {} {}", node, error.error).into())
+            match tokio::time::timeout(
+                Duration::from_secs(NODE_DEADLINE),
+                request_sign_message(
+                    room_id.to_string(),
+                    pub_key,
+                    parties,
+                    index,
+                    node.clone(),
+                    message,
+                ),
+            )
+            .await
+            .map_err(anyhow::Error::from)
+            {
+                Ok(Err(e)) | Err(e) => {
+                    let message = format!(
+                        "node {} compute the signature failed {}",
+                        node.clone(),
+                        e.to_string()
+                    );
+                    error!("compute failed {:?}", message.to_string());
+                    Err(anyhow!(message))
+                }
+                Ok(Ok(ret)) => Ok(ret),
             }
-        }
-       
-    });
+        });
 
     let result: Vec<anyhow::Result<(Sig, String), anyhow::Error>> = future::join_all(futures).await;
 
@@ -204,15 +294,73 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
 
 #[cfg(test)]
 pub mod test {
+
     use super::NODE_DELAY;
+    use super::{ErrorMsg, Sig};
     use anyhow::{anyhow, Context, Result};
     use futures::future;
     use rocket::serde::json::json;
     use std::sync::Arc;
+    use surf::StatusCode;
     use tokio::time::{sleep, Duration};
     use uuid::Uuid;
 
     use super::PubKeyIndex;
+
+    #[tokio::test]
+    async fn test_join_all() -> Result<()> {
+        async fn foo(
+            i: u16,
+            node: String,
+            room_id: String,
+        ) -> Result<(Sig, String), anyhow::Error> {
+            let pub_key =
+                "03c7f4ce41ac65c6c779c57395811fa4a04a27ccad5f7f94d0e4272da599ccfe17".to_string();
+            let message =
+                "02f56d106cc4fc4e83da3ff49b827c4e13f3929dc558382c3049c94449f2852d".to_string();
+            let parties = [1, 2];
+            let index = i;
+
+            let body = json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
+            sleep(Duration::from_millis(u64::from(i * NODE_DELAY))).await;
+
+            let mut url = surf::Url::parse(node.as_str().clone()).context("build url failed")?;
+            url.set_path("/ecdsa/gg_20/pub_key/sign");
+
+            let mut res = surf::post(url)
+                .header("token", room_id.clone().to_string())
+                .body_json(&body)
+                .map_err(|e| anyhow!(e.into_inner()))?
+                .await
+                .map_err(|e| anyhow!("fetch from node {} {}", node, e.into_inner()))?;
+            let body = res.body_string().await.map_err(|e| e.into_inner())?;
+            let status = res.status();
+
+            match status {
+                StatusCode::Ok => {
+                    let sig: Sig = serde_json::from_str(body.as_str())
+                        .map_err(|e| anyhow!("failed to decode the body {} {}", node, e))?;
+                    anyhow::Ok((sig, node.to_string()))
+                }
+                StatusCode::BadGateway => Err(anyhow!("failed to connect the endpoint {}", node)),
+                _ => {
+                    let error: ErrorMsg = serde_json::from_str(body.as_str())
+                        .context("failed to decode the error body")?;
+                    Err(anyhow!("failed to compute the key {} {}", node, error.error).into())
+                }
+            }
+        }
+        let room_id = Uuid::new_v4().to_string();
+        let futures = vec![
+            foo(1, "http://localhost:8000".to_string(), room_id.clone()),
+            foo(2, "http://localhost:18000".to_string(), room_id.clone()),
+            // foo(3)
+        ];
+        let result: Vec<anyhow::Result<(Sig, String), anyhow::Error>> =
+            future::join_all(futures).await;
+        println!("{:?} ", result);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_async_keygen() -> Result<()> {
