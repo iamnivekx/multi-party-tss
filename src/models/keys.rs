@@ -92,10 +92,13 @@ impl Key {
 pub mod test {
     use super::Key;
     use crate::lib::establish_connection;
+    use crate::opt::Opt;
+    use structopt::StructOpt;
 
     #[tokio::test]
     async fn test_create_key() -> Result<(), anyhow::Error> {
-        let connection = establish_connection()?;
+        let opt = Opt::from_args();
+        let connection = establish_connection(opt.postgres_url.unwrap().as_str())?;
         let idx = 1;
         let t = 1;
         let n = 2;
@@ -109,7 +112,8 @@ pub mod test {
 
     #[tokio::test]
     async fn test_find_key_by_id() -> Result<(), anyhow::Error> {
-        let connection = establish_connection()?;
+        let opt = Opt::from_args();
+        let connection = establish_connection(opt.postgres_url.unwrap().as_str())?;
         let id = 1;
 
         let key = Key::find_by_id(&connection, id);
@@ -119,7 +123,8 @@ pub mod test {
 
     #[tokio::test]
     async fn test_delete_key_by_id() -> Result<(), anyhow::Error> {
-        let connection = establish_connection()?;
+        let opt = Opt::from_args();
+        let connection = establish_connection(opt.postgres_url.unwrap().as_str())?;
         let id = 1;
 
         let key = Key::delete_by_id(&connection, id);

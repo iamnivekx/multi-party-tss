@@ -3,7 +3,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::env;
 use std::option::Option::Some;
 use std::sync::RwLock;
 use std::time::Duration;
@@ -25,6 +24,11 @@ pub struct PartySignupReq<'r> {
 pub struct ApiCommunity {
     addr: String,
     client: Client,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HashMapCommunity {
+    inner: String,
 }
 
 impl ApiCommunity {
@@ -69,10 +73,7 @@ impl Community for ApiCommunity {
             key: key.clone(),
             value: "".to_string(),
         };
-        let res_body = self
-            .post("ecdsa/management/get-entry", &index)
-            .await
-            .unwrap();
+        let res_body = self.post("get-entry", &index).await.unwrap();
         match serde_json::from_str(&res_body) {
             Ok(v) => Ok(v),
             Err(_e) => Err(()),
@@ -80,10 +81,7 @@ impl Community for ApiCommunity {
     }
 
     async fn set_entry(&self, entry: &Entry) -> Result<Entry, ()> {
-        let res_body = self
-            .post("ecdsa/management/set-entry", entry.clone())
-            .await
-            .unwrap();
+        let res_body = self.post("set-entry", entry.clone()).await.unwrap();
         match serde_json::from_str(&res_body) {
             Ok(v) => Ok(v),
             Err(_e) => Err(()),
@@ -96,10 +94,7 @@ impl Community for ApiCommunity {
             num,
             key: key_str.as_str(),
         };
-        let res_body = self
-            .post("ecdsa/management/signup-party", req)
-            .await
-            .unwrap();
+        let res_body = self.post("signup-party", req).await.unwrap();
         match serde_json::from_str(&res_body) {
             Ok(v) => Ok(v),
             Err(_e) => Err(()),
@@ -108,11 +103,12 @@ impl Community for ApiCommunity {
 }
 
 pub fn get_adapter<'a>(
+    addr: &'a str,
     store: &'a RwLock<HashMap<String, String>>,
 ) -> Box<dyn Community + Sync + Send + 'a> {
-    match env::var("COMMUNICATE_API") {
-        Ok(v) => Box::new(ApiCommunity::new(v.clone())),
-        Err(_) => Box::new(StoreCommunity::new(&store)),
+    match addr.len() > 0 {
+        true => Box::new(ApiCommunity::new(addr.to_string())),
+        false => Box::new(StoreCommunity::new(&store)),
     }
 }
 
@@ -136,7 +132,7 @@ pub mod test {
         let db: HashMap<String, String> = HashMap::new();
         let store = RwLock::new(db);
 
-        let _adapter = get_adapter(&store);
+        let _adapter = get_adapter("", &store);
     }
 
     #[tokio::test]
@@ -145,7 +141,7 @@ pub mod test {
         let db: HashMap<String, String> = HashMap::new();
         let store = RwLock::new(db);
 
-        let adapter = get_adapter(&store);
+        let adapter = get_adapter("", &store);
         let num = 3;
         let key = "key".to_string();
         let result = adapter.get_party_signup(num, &key).await;

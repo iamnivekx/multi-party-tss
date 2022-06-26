@@ -1,18 +1,15 @@
-use rocket::http::Status;
-use rocket::response::status;
+use anyhow::anyhow;
 use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
 use rocket::State;
-
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use crate::ecdsa::gg_2018::common::party_key_pub_hex;
-use crate::ecdsa::gg_2018::keygen::keygen;
-use crate::ecdsa::gg_2018::sign::sign;
-
-use crate::api::ecdsa::gg_2018::adapter::get_adapter;
-use crate::api::from_request::token::Token;
+use crate::api::{
+    ecdsa::gg_2018::adapter::get_adapter, from_request::token::Token, response::error::ApiError,
+};
+use crate::config::Config;
+use crate::ecdsa::gg_2018::{common::party_key_pub_hex, keygen::keygen, sign::sign};
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct KeyGenReq {
@@ -23,23 +20,25 @@ pub struct KeyGenReq {
 pub async fn gen_key(
     token: Token,
     store: &State<RwLock<HashMap<String, String>>>,
+    config: &State<Config>,
     request: Json<KeyGenReq>,
-) -> status::Custom<Value> {
+) -> Result<Value, ApiError> {
     let room_id = token.0.to_string();
     let parties = request.parties;
     let threshold = request.threshold;
-    let adapter = get_adapter(store);
+    let addr = config.gg18_communicate_endpoint.clone();
+    let addr = addr.ok_or(ApiError::BadRequest(anyhow!(
+        "please set the gg18_communicate_endpoint."
+    )))?;
+    let adapter = get_adapter(addr.as_str(), store);
     let gen_key = keygen(parties, threshold, &room_id, &adapter).await;
     let pub_hex = party_key_pub_hex(&gen_key);
-    status::Custom(
-        Status::Ok,
-        json!({
-            "key": gen_key,
-            "pub_key": pub_hex,
-            "threshold": threshold,
-            "parties": parties,
-        }),
-    )
+    Ok(json!({
+        "key": gen_key,
+        "pub_key": pub_hex,
+        "threshold": threshold,
+        "parties": parties,
+    }))
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -53,19 +52,22 @@ pub struct KeySignReq<'r> {
 pub async fn sign_message(
     token: Token,
     store: &State<RwLock<HashMap<String, String>>>,
+    config: &State<Config>,
     request: Json<KeySignReq<'_>>,
-) -> status::Custom<Value> {
+) -> Result<Value, ApiError> {
     let room_id = token.0.to_string();
     let key = request.key.to_string();
     let parties = request.parties;
     let threshold = request.threshold;
     let message = request.message.to_string();
-    let adapter = get_adapter(store);
+    let addr = config.gg18_communicate_endpoint.clone();
+
+    let addr = addr.ok_or(ApiError::BadRequest(anyhow!(
+        "please set the gg18_communicate_endpoint."
+    )))?;
+    let adapter = get_adapter(addr.as_str(), store);
     let signature = sign(parties, threshold, &key, &room_id, &message, &adapter).await;
-    status::Custom(
-        Status::Ok,
-        json!({
-            "signature": signature,
-        }),
-    )
+    Ok(json!({
+        "signature": signature,
+    }))
 }

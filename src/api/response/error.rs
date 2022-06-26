@@ -7,8 +7,12 @@ use serde_json::json;
 use std::io::Cursor;
 use thiserror::Error;
 
+use crate::util::store::StoreError;
+
 #[derive(Error, Debug)]
 pub enum ApiError {
+    #[error("{1:#}")]
+    Custom(Status, String),
     #[error("{0:#}")]
     BadRequest(anyhow::Error),
     #[error("{0:#}")]
@@ -20,6 +24,18 @@ pub enum ApiError {
 impl From<anyhow::Error> for ApiError {
     fn from(e: anyhow::Error) -> Self {
         ApiError::Unknown(e)
+    }
+}
+
+impl From<StoreError> for ApiError {
+    fn from(e: StoreError) -> Self {
+        ApiError::Custom(Status::InternalServerError, e.to_string())
+    }
+}
+
+impl From<(Status, String)> for ApiError {
+    fn from((status, message): (Status, String)) -> Self {
+        ApiError::Custom(status, message)
     }
 }
 
@@ -35,6 +51,7 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for ApiError {
         let desc = json!({ "error": description.to_string() });
         let body = Cursor::new(format!("{}", desc.to_string()));
         let status = match self {
+            ApiError::Custom(status, _) => status,
             ApiError::BadRequest(_) => Status::BadRequest,
             _ => Status::InternalServerError,
         };

@@ -1,9 +1,7 @@
-use lazy_static::lazy_static;
 use rocket::http::Status;
 use rocket::response::status::Custom;
 use rocket::serde::json::{json, Value};
 use rocket::Request;
-use std::env;
 
 use ecdsa::gg_2018::{
     centralized::{gen_keys, signatures},
@@ -23,15 +21,6 @@ mod response;
 mod token;
 
 use token::gen_token;
-
-lazy_static! {
-    pub static ref GG_18: bool = {
-        match env::var("GG_18") {
-            Ok(v) => v.eq("true"),
-            Err(_) => false,
-        }
-    };
-}
 
 #[catch(404)]
 fn not_found() -> Value {
@@ -55,36 +44,33 @@ fn default_catcher(status: Status, req: &Request<'_>) -> Custom<Value> {
 }
 
 pub fn stage() -> rocket::fairing::AdHoc {
-    rocket::fairing::AdHoc::on_ignite("JSON", |rocket| async {
+    rocket::fairing::AdHoc::on_ignite("JSON", move |rocket| async move {
         let rocket_build = rocket
             .mount("/", routes![gen_token,])
             .register("/", catchers![not_found, default_catcher]);
 
-        match *GG_18 {
-            true => rocket_build
-                .mount("/ecdsa/gg_18/distributed", routes![gen_key, sign_message])
-                .mount("/ecdsa/gg_18/centralized", routes![gen_keys, signatures])
-                .mount(
-                    "/ecdsa/gg_18/management/",
-                    routes![get_entry, set_entry, signup_party],
-                ),
-            false => rocket_build
-                .mount(
-                    "/ecdsa/gg_20/management/",
-                    routes![broadcast, issue_idx, subscribe],
-                )
-                .mount(
-                    "/ecdsa/gg_20/distributed/",
-                    routes![gg20_gen_key, gg20_sign_message],
-                )
-                .mount(
-                    "/ecdsa/gg_20/pub_key/",
-                    routes![gg_20_key_gen_key, gg_20_key_sign_message],
-                )
-                .mount(
-                    "/ecdsa/gg_20/gateway/",
-                    routes![gg_20_gateway_key_gen_key, gg_20_gateway_sign_message],
-                ),
-        }
+        rocket_build
+            .mount("/ecdsa/gg_18/distributed", routes![gen_key, sign_message])
+            .mount("/ecdsa/gg_18/centralized", routes![gen_keys, signatures])
+            .mount(
+                "/ecdsa/gg_18/management/",
+                routes![get_entry, set_entry, signup_party],
+            )
+            .mount(
+                "/ecdsa/gg_20/management/",
+                routes![broadcast, issue_idx, subscribe],
+            )
+            .mount(
+                "/ecdsa/gg_20/distributed/",
+                routes![gg20_gen_key, gg20_sign_message],
+            )
+            .mount(
+                "/ecdsa/gg_20/pub_key/",
+                routes![gg_20_key_gen_key, gg_20_key_sign_message],
+            )
+            .mount(
+                "/ecdsa/gg_20/gateway/",
+                routes![gg_20_gateway_key_gen_key, gg_20_gateway_sign_message],
+            )
     })
 }
