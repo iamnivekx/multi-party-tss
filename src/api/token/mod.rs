@@ -1,5 +1,4 @@
 use rocket::serde::json::{json, Value};
-
 use uuid::Uuid;
 
 #[post("/token")]

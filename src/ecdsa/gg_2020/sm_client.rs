@@ -1,10 +1,8 @@
-use std::convert::TryInto;
-
 use anyhow::{Context, Result};
 use futures::{Sink, Stream, StreamExt, TryStreamExt};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
 use round_based::Msg;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::convert::TryInto;
 
 pub async fn join_computation<M>(
     address: surf::Url,

@@ -3,16 +3,13 @@ use curv::arithmetic::Converter;
 use curv::elliptic::curves::secp256_k1::Secp256k1;
 use curv::BigInt;
 use futures::{SinkExt, StreamExt, TryStreamExt};
-
-use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::LocalKey;
-use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::sign::{
-    OfflineStage, SignManual,
+use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::{
+    keygen::LocalKey,
+    sign::{OfflineStage, SignManual},
 };
-use round_based::async_runtime::AsyncProtocol;
-use round_based::Msg;
+use round_based::{async_runtime::AsyncProtocol, Msg};
 
-use crate::ecdsa::common::check_sig;
-use crate::ecdsa::gg_2020::sm_client::join_computation;
+use crate::ecdsa::{common::check_sig, gg_2020::sm_client::join_computation};
 
 #[allow(dead_code)]
 pub async fn sign(

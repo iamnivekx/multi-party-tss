@@ -23,7 +23,7 @@ use multi_party_ecdsa::utilities::mta::*;
 use paillier::EncryptionKey;
 
 use super::common::{
-    aes_decrypt, aes_encrypt, broadcast, check_sig, poll_for_broadcasts, poll_for_p2p, sendp2p,
+    aes_decrypt, aes_encrypt, broadcast, check_sig, poll_for_broadcasts, poll_for_p2p, send_p2p,
     ECDSAError, Entry, Index, Key, PartySignup, AEAD,
 };
 

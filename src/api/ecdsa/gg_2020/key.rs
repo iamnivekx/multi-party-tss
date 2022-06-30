@@ -1,9 +1,7 @@
 use anyhow::Context;
-
 use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
 use rocket::State;
-
 use std::result::Result;
 
 use crate::api::from_request::token::Token;

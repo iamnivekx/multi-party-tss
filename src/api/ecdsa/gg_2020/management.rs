@@ -1,10 +1,9 @@
+use futures::Stream;
 use rocket::http::Status;
 use rocket::response::stream::{stream, Event, EventStream};
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::State;
-
-use futures::Stream;
 
 use crate::api::from_request::last_event_id::LastEventId;
 use crate::state::db::Db;

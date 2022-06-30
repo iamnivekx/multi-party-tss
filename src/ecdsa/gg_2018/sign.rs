@@ -1,8 +1,4 @@
 #![allow(non_snake_case)]
-
-use serde_json::json;
-use std::time;
-
 use curv::{
     arithmetic::traits::*,
     cryptographic_primitives::{
@@ -12,6 +8,8 @@ use curv::{
     elliptic::curves::{secp256_k1::Secp256k1, Point, Scalar},
     BigInt,
 };
+use serde_json::json;
+use std::time;
 
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2018::party_i::{
     Keys, LocalSignature, PartyPrivate, Phase5ADecom1, Phase5Com1, Phase5Com2, Phase5DDecom2,
@@ -21,8 +19,7 @@ use multi_party_ecdsa::utilities::mta::*;
 use paillier::EncryptionKey;
 use sha2::Sha256;
 
-use super::common::{broadcast, check_sig, poll_for_broadcasts, poll_for_p2p, sendp2p};
-
+use super::common::{broadcast, check_sig, poll_for_broadcasts, poll_for_p2p, send_p2p};
 use super::format::{
     format_broadcast_phase1_and_message_a_vec, format_message_b_and_ni_vec,
     format_round2_alpha_and_miu_vec, format_round2_rec_gamma_and_w_vec, format_signers,
@@ -132,7 +129,7 @@ pub async fn sign<'a>(
     let mut j = 0;
     for i in 1..=threshold + 1 {
         if i != party_num_int {
-            assert!(sendp2p(
+            assert!(send_p2p(
                 adapter,
                 party_num_int,
                 i,

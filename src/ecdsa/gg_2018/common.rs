@@ -127,7 +127,7 @@ pub async fn poll_for_broadcasts<'a>(
     ans_vec
 }
 
-pub async fn sendp2p<'a>(
+pub async fn send_p2p<'a>(
     adapter: &Box<dyn Community + Send + Sync + 'a>,
     party_from: u16,
     party_to: u16,

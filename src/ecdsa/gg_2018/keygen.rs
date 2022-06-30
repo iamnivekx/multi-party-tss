@@ -1,9 +1,4 @@
 #![allow(unused_imports)]
-use std::collections::HashMap;
-use std::sync::RwLock;
-use std::{env, fs, thread, time, time::Duration};
-use uuid::Uuid;
-
 use curv::{
     arithmetic::traits::*,
     cryptographic_primitives::{
@@ -13,17 +8,19 @@ use curv::{
     elliptic::curves::{secp256_k1::Secp256k1, Point, Scalar},
     BigInt,
 };
-
-use super::adapter::Community;
-use super::common::{
-    aes_decrypt, aes_encrypt, broadcast, poll_for_broadcasts, poll_for_p2p, sendp2p, ECDSAError,
-    Entry, Index, Key, PartySignup, AEAD, AES_KEY_BYTES_LEN,
-};
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2018::party_i::{
     KeyGenBroadcastMessage1, KeyGenDecommitMessage1, Keys, Parameters,
 };
 use paillier::EncryptionKey;
 use sha2::Sha256;
+use std::{collections::HashMap, env, fs, sync::RwLock, thread, time, time::Duration};
+use uuid::Uuid;
+
+use super::adapter::Community;
+use super::common::{
+    aes_decrypt, aes_encrypt, broadcast, poll_for_broadcasts, poll_for_p2p, send_p2p, ECDSAError,
+    Entry, Index, Key, PartySignup, AEAD, AES_KEY_BYTES_LEN,
+};
 
 pub async fn keygen<'a>(
     parties: u16,
@@ -135,7 +132,7 @@ pub async fn keygen<'a>(
             let key_i = &enc_keys[j];
             let plaintext = BigInt::to_bytes(&secret_shares[k].to_bigint());
             let aead_pack_i = aes_encrypt(key_i, &plaintext);
-            assert!(sendp2p(
+            assert!(send_p2p(
                 adapter,
                 party_num_int,
                 i,
