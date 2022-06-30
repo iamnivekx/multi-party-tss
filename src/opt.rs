@@ -7,6 +7,29 @@ use crate::config;
 pub struct Opt {
     #[structopt(
         long,
+        value_name = "log level",
+        env = "RUST_LOG",
+        default_value = "info",
+        help = "rust log level"
+    )]
+    pub log_level: String,
+    #[structopt(
+        long,
+        value_name = "log directory",
+        env = "RUST_LOG_DIRECTORY",
+        default_value = "logs",
+        help = "rust log directory"
+    )]
+    pub log_directory: String,
+    #[structopt(
+        long,
+        value_name = "log file prefix name",
+        env = "RUST_LOG_FILE_PREFIX_NAME",
+        help = "log file prefix name"
+    )]
+    pub log_file_prefix_name: String,
+    #[structopt(
+        long,
         value_name = "enable the gg18 distributed",
         env = "GG18_ENABLE_DISTRIBUTED",
         help = "enable the gg18 distributed futures"
@@ -91,6 +114,9 @@ pub struct Opt {
 impl From<Opt> for config::Opt {
     fn from(opt: Opt) -> Self {
         let Opt {
+            log_level,
+            log_directory,
+            log_file_prefix_name,
             gg18_enable_distributed,
             gg18_communicate_endpoint,
             gg20_enable_distributed,
@@ -106,6 +132,9 @@ impl From<Opt> for config::Opt {
         } = opt;
 
         config::Opt {
+            log_level,
+            log_directory,
+            log_file_prefix_name,
             gg18_enable_distributed,
             gg18_communicate_endpoint,
             gg20_enable_distributed,

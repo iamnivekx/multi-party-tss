@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
 use rocket::State;
@@ -26,10 +25,9 @@ pub async fn gen_key(
     let room_id = token.0.to_string();
     let parties = request.parties;
     let threshold = request.threshold;
-    let addr = config.gg18_communicate_endpoint.clone();
-    let addr = addr.ok_or(ApiError::BadRequest(anyhow!(
-        "please set the gg18_communicate_endpoint."
-    )))?;
+    let addr = config
+        .gg18_communicate_endpoint()
+        .map_err(|e| ApiError::BadRequest(e.into()))?;
     let adapter = get_adapter(addr.as_str(), store);
     let gen_key = keygen(parties, threshold, &room_id, &adapter).await;
     let pub_hex = party_key_pub_hex(&gen_key);
@@ -60,11 +58,9 @@ pub async fn sign_message(
     let parties = request.parties;
     let threshold = request.threshold;
     let message = request.message.to_string();
-    let addr = config.gg18_communicate_endpoint.clone();
-
-    let addr = addr.ok_or(ApiError::BadRequest(anyhow!(
-        "please set the gg18_communicate_endpoint."
-    )))?;
+    let addr = config
+        .gg18_communicate_endpoint()
+        .map_err(|e| ApiError::BadRequest(e.into()))?;
     let adapter = get_adapter(addr.as_str(), store);
     let signature = sign(parties, threshold, &key, &room_id, &message, &adapter).await;
     Ok(json!({

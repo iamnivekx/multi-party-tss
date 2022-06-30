@@ -6,6 +6,7 @@ use rocket::response::{self, Responder, Response};
 use serde_json::json;
 use std::io::Cursor;
 use thiserror::Error;
+use tracing::{error, instrument};
 
 use crate::util::store::StoreError;
 
@@ -46,6 +47,7 @@ impl From<diesel::result::Error> for ApiError {
 }
 
 impl<'r, 'o: 'r> Responder<'r, 'o> for ApiError {
+    #[instrument]
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'o> {
         let description = self.to_string();
         let desc = json!({ "error": description.to_string() });

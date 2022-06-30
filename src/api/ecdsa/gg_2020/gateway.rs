@@ -2,15 +2,16 @@ use anyhow::{anyhow, Context};
 use futures::future;
 use rocket::serde::json::{json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
+use rocket::State;
 use std::sync::Arc;
+use std::time::Duration;
 use surf::StatusCode;
-use tokio::time::{sleep, Duration};
+use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::api::response::error::ApiError;
+use crate::config::Config;
 
-pub const NODE_DELAY: u16 = 20;
-pub const NODE_DEADLINE: u64 = 60 * 2;
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ErrorMsg {
     error: String,
@@ -40,6 +41,7 @@ pub struct PubKeyIndex {
 }
 
 async fn request_key_gen(
+    request_delay: u64,
     room_id: String,
     threshold: u16,
     parties: u16,
@@ -48,10 +50,12 @@ async fn request_key_gen(
 ) -> Result<(PubKey, String), anyhow::Error> {
     let mut url = surf::Url::parse(node.as_str()).context("url parse failed")?;
     url.set_path("/ecdsa/gg_20/pub_key/keys");
-
     let body = json!({ "index": index, "threshold": threshold, "parties": parties });
 
-    sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
+    sleep(Duration::from_millis(
+        request_delay * (index.clone() as u64),
+    ))
+    .await;
     let mut res = surf::post(url)
         .header("token", room_id.to_string())
         .body_json(&body)
@@ -77,7 +81,10 @@ async fn request_key_gen(
 }
 
 #[post("/keys", data = "<request>")]
-pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
+pub async fn gen_keys(request: Json<KeyGenReq>, config: &State<Config>) -> Result<Value, ApiError> {
+    let request_delay = Arc::new(config.node_request_delay());
+    let request_max_timeout = Arc::new(Duration::from_secs(config.node_request_max_timeout()));
+
     let nodes = request.nodes.to_vec();
     let nodes = Arc::new(nodes);
 
@@ -89,36 +96,47 @@ pub async fn gen_keys(request: Json<KeyGenReq>) -> Result<Value, ApiError> {
 
     let futures = (1..=parties)
         .into_iter()
-        .map(|index| (index, nodes.clone(), room_id.clone()))
-        .map(|(index, nodes, room_id)| async move {
-            let parties = nodes.len() as u16;
-            let node = nodes[index as usize - 1].clone();
-
-            match tokio::time::timeout(
-                Duration::from_secs(NODE_DEADLINE),
-                request_key_gen(
-                    room_id.to_string(),
-                    threshold.clone(),
-                    parties,
-                    index,
-                    node.clone(),
-                ),
+        .map(|index| {
+            (
+                index,
+                nodes.clone(),
+                room_id.clone(),
+                request_delay.clone(),
+                request_max_timeout.clone(),
             )
-            .await
-            .map_err(anyhow::Error::from)
-            {
-                Ok(Err(e)) | Err(e) => {
-                    let message = format!(
-                        "node {} compute the key failed {}",
+        })
+        .map(
+            |(index, nodes, room_id, request_delay, request_max_timeout)| async move {
+                let parties = nodes.len() as u16;
+                let node = nodes[index as usize - 1].clone();
+
+                match tokio::time::timeout(
+                    *request_max_timeout,
+                    request_key_gen(
+                        *request_delay,
+                        room_id.to_string(),
+                        threshold.clone(),
+                        parties,
+                        index,
                         node.clone(),
-                        e.to_string()
-                    );
-                    error!("compute failed {:?}", message.to_string());
-                    Err(anyhow!(message))
+                    ),
+                )
+                .await
+                .map_err(anyhow::Error::from)
+                {
+                    Ok(Err(e)) | Err(e) => {
+                        let message = format!(
+                            "node {} compute the key failed {}",
+                            node.clone(),
+                            e.to_string()
+                        );
+                        error!("compute failed {:?}", message.to_string());
+                        Err(anyhow!(message))
+                    }
+                    Ok(Ok(ret)) => Ok(ret),
                 }
-                Ok(Ok(ret)) => Ok(ret),
-            }
-        });
+            },
+        );
     let keys: Vec<anyhow::Result<(PubKey, String), anyhow::Error>> =
         future::join_all(futures).await;
     let mut pub_keys: Vec<PubKeyIndex> = Vec::new();
@@ -163,6 +181,7 @@ pub struct Sig {
 }
 
 async fn request_sign_message(
+    request_delay: u64,
     room_id: String,
     pub_key: String,
     parties: Vec<u16>,
@@ -175,7 +194,10 @@ async fn request_sign_message(
 
     let body =
         json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
-    sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
+    sleep(Duration::from_millis(u64::from(
+        index as u64 * request_delay,
+    )))
+    .await;
     let mut res = surf::post(url)
         .header("token", room_id.to_string())
         .body_json(&body)
@@ -200,9 +222,13 @@ async fn request_sign_message(
 }
 
 #[post("/sign", data = "<request>")]
-pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> {
-    let room_id = Uuid::new_v4().to_string();
-    let room_id = Arc::new(room_id);
+pub async fn sign_message(
+    request: Json<KeySignReq>,
+    config: &State<Config>,
+) -> Result<Value, ApiError> {
+    let request_delay = Arc::new(config.node_request_delay());
+    let request_max_timeout = Arc::new(Duration::from_secs(config.node_request_max_timeout()));
+    let room_id = Arc::new(Uuid::new_v4().to_string());
 
     let pub_key = request.pub_key.to_string();
     let pub_key = Arc::new(pub_key);
@@ -233,41 +259,45 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
                 message.clone(),
                 parties.clone(),
                 room_id.clone(),
+                request_delay.clone(),
+                request_max_timeout.clone(),
             )
         })
-        .map(|(key, pub_key, message, parties, room_id)| async move {
-            let pub_key = pub_key.to_string();
-            let message = message.to_string();
-            let parties = parties.to_vec();
-            let index = key.index;
-            let node = key.node;
-
-            match tokio::time::timeout(
-                Duration::from_secs(NODE_DEADLINE),
-                request_sign_message(
-                    room_id.to_string(),
-                    pub_key,
-                    parties,
-                    index,
-                    node.clone(),
-                    message,
-                ),
-            )
-            .await
-            .map_err(anyhow::Error::from)
-            {
-                Ok(Err(e)) | Err(e) => {
-                    let message = format!(
-                        "node {} compute the signature failed {}",
+        .map(
+            |(key, pub_key, message, parties, room_id, request_delay,request_max_timeout)| async move {
+                let pub_key = pub_key.to_string();
+                let message = message.to_string();
+                let parties = parties.to_vec();
+                let index = key.index;
+                let node = key.node;
+                match tokio::time::timeout(
+                    *request_max_timeout.clone(),
+                    request_sign_message(
+                        *request_delay,
+                        room_id.to_string(),
+                        pub_key,
+                        parties,
+                        index,
                         node.clone(),
-                        e.to_string()
-                    );
-                    error!("compute failed {:?}", message.to_string());
-                    Err(anyhow!(message))
+                        message,
+                    ),
+                )
+                .await
+                .map_err(anyhow::Error::from)
+                {
+                    Ok(Err(e)) | Err(e) => {
+                        let message = format!(
+                            "node {} compute the signature failed {}",
+                            node.clone(),
+                            e.to_string()
+                        );
+                        error!("compute failed {:?}", message.to_string());
+                        Err(anyhow!(message))
+                    }
+                    Ok(Ok(ret)) => Ok(ret),
                 }
-                Ok(Ok(ret)) => Ok(ret),
-            }
-        });
+            },
+        );
 
     let result: Vec<anyhow::Result<(Sig, String), anyhow::Error>> = future::join_all(futures).await;
 
@@ -295,7 +325,6 @@ pub async fn sign_message(request: Json<KeySignReq>) -> Result<Value, ApiError> 
 #[cfg(test)]
 pub mod test {
 
-    use super::NODE_DELAY;
     use super::{ErrorMsg, Sig};
     use anyhow::{anyhow, Context, Result};
     use futures::future;
@@ -322,7 +351,7 @@ pub mod test {
             let index = i;
 
             let body = json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
-            sleep(Duration::from_millis(u64::from(i * NODE_DELAY))).await;
+            sleep(Duration::from_millis(u64::from(i * 10))).await;
 
             let mut url = surf::Url::parse(node.as_str().clone()).context("build url failed")?;
             url.set_path("/ecdsa/gg_20/pub_key/sign");
@@ -436,7 +465,7 @@ pub mod test {
             let mut url = surf::Url::parse(node.as_str()).context("build url failed")?;
             url.set_path("/ecdsa/gg_20/pub_key/sign");
             let body = json!({ "index": index, "pub_key": pub_key, "parties": parties, "message": message });
-            sleep(Duration::from_millis(u64::from(index * NODE_DELAY))).await;
+            sleep(Duration::from_millis(u64::from(index * 10))).await;
             let mut res = surf::post(url).header("token", room_id.to_string()).body_json(&body).map_err(|e| anyhow!(e.to_string())).context("Build request failed")?.await.map_err(|e| anyhow!(e.to_string())).context("Failed to fetch from nodes")?;
             let body = res.body_string().await.map_err(|e| anyhow!(e.to_string())).context("failed to get body")?;
             anyhow::Ok(body)

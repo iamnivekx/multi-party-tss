@@ -1,12 +1,13 @@
 use crate::ecdsa::gg_2020::sm_client::join_computation;
 use anyhow::{anyhow, Context, Ok, Result};
-
 use futures::StreamExt;
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::Keygen;
 use round_based::async_runtime::AsyncProtocol;
+use tracing::instrument;
 
 use crate::ecdsa::common::party_key_compress_pub_hex;
 
+#[instrument]
 pub async fn keygen(
     index: u16,
     threshold: u16,

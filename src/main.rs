@@ -15,6 +15,7 @@ use rocket::{
 use std::collections::HashMap;
 use std::sync::RwLock;
 use structopt::StructOpt;
+use tracing_subscriber::{filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub mod api;
 pub mod config;
@@ -35,7 +36,6 @@ use crate::store_builder::StoreBuilder;
 #[rocket::main]
 async fn main() -> Result<(), anyhow::Error> {
     dotenv().ok();
-
     let opt = opt::Opt::from_args();
     let config = match AppConfig::load(&opt.clone().into()) {
         Err(e) => {
@@ -44,6 +44,23 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         Ok(config) => config,
     };
+
+    // log to console
+    let std_layer = fmt::layer().with_writer(std::io::stderr);
+    let file_appended = tracing_appender::rolling::daily(
+        config.file_log_opt.directory.clone(),
+        config.file_log_opt.file_prefix_name.clone(),
+    );
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appended);
+    // log to file
+    let file_layer = fmt::Layer::new().pretty().with_writer(non_blocking);
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(file_layer)
+        .with(std_layer)
+        .init();
 
     let mut store = StoreBuilder::new(&config);
     let _ = store.try_connected().await?;

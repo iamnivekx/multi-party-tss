@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
+use tracing::{info, instrument};
 
 use crate::util::futures::{CancelGuard, CancelHandle, CancelToken as _, CancelableError};
 use crate::util::store::StoreError;
@@ -72,6 +73,7 @@ impl PoolStateTracker {
 }
 
 impl ConnectionPool {
+    #[instrument(skip(postgres_url))]
     pub fn create(
         shard_name: &str,
         postgres_url: String,

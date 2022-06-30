@@ -12,7 +12,7 @@ impl StoreBuilder {
     pub fn new(config: &Config) -> Self {
         Self {
             config: config.clone(),
-            enable: config.gg20_enable_distributed,
+            enable: config.enable_store(),
             pool: None,
         }
     }

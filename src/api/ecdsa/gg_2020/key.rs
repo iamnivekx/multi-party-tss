@@ -27,7 +27,7 @@ pub async fn key_gen_key(
     store: &State<StoreBuilder>,
 ) -> Result<Value, ApiError> {
     let addr = config
-        .valid_gg20_communicate_endpoint()
+        .gg20_communicate_endpoint()
         .map_err(|e| ApiError::BadRequest(e.into()))?;
     let address = surf::Url::parse(addr.as_str()).unwrap();
     let room_id = token.0.to_string();
@@ -83,7 +83,7 @@ pub async fn key_sign_message(
     store: &State<StoreBuilder>,
 ) -> Result<Value, ApiError> {
     let addr = config
-        .valid_gg20_communicate_endpoint()
+        .gg20_communicate_endpoint()
         .map_err(|e| ApiError::BadRequest(e.into()))?;
     let address = surf::Url::parse(addr.as_str()).unwrap();
     let room_id = token.0.to_string();
