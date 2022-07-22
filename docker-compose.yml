@@ -6,27 +6,55 @@ services:
     image: tss
     ports:
       - "18000:8000"
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
     env_file:
       - .env
     environment:
+      - GG20_ENABLE_DISTRIBUTED=true
       - ROCKET_PORT=8000
 
   tss2:
     <<: *node
+    restart: unless-stopped
     ports:
-      - "28000:8000"
-
+      - "18001:8000"
+    environment:
+      - ROCKET_ENV=release
+      - ROCKET_PORT=8000
+      - ROCKET_ADDRESS=0.0.0.0
+    env_file:
+      - .env
   tss3:
     <<: *node
+    restart: unless-stopped
     ports:
-      - "38000:8000"
+      - "18002:8000"
+    environment:
+      - ROCKET_ENV=release
+      - ROCKET_PORT=8000
+      - ROCKET_ADDRESS=0.0.0.0
+    env_file:
+      - .env
 
-  manager:
+  gateway:
     <<: *node
-    container_name: manager
+    restart: unless-stopped
+    ports:
+      - "28000:8000"
+    environment:
+      - ROCKET_ENV=release
+      - ROCKET_PORT=8000
+      - ROCKET_ADDRESS=0.0.0.0
+    env_file:
+      - .env
+
+  consensu:
+    <<: *node
+    restart: unless-stopped
+    container_name: consensu
     ports:
       - "9000:9000"
     environment:
